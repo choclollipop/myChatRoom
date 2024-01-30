@@ -25,11 +25,29 @@
 /* 创建数据库句柄 */
 sqlite3 * chatRoomDB = NULL;
 
+/* 主界面选择 */
 enum CLIENT_CHOICE
 {
     LOG_IN = 1,
     REGISTER,
-    PRIVATE_CHAT,
+    EXIT,
+};
+
+/* 运行状态码 */
+enum STATUS_CODE
+{
+    ON_SUCCESS,
+    ERROR = -1,
+};
+
+/* 聊天室功能选择 */
+enum FUNC_CHOICE
+{
+    F_FRIEND_VIEW = 1,
+    F_FRIEND_INCREASE,
+    F_FRIEND_DELETE,
+    F_PRIVATE_CHAT,
+    F_GROUP_CHAT,
 };
 
 typedef struct chatRoom
@@ -44,6 +62,7 @@ typedef struct clientNode
 {
     char loginName[DEFAULT_LOGIN_NAME];
     char loginPawd[DEFAULT_LOGIN_PAWD];
+    int communicateFd;
 } clientNode;
 
 
@@ -56,7 +75,7 @@ int compareFunc(void * val1, void * val2)
     clientNode * client = (clientNode *)val1;
     clientNode * data = (clientNode *)val2;
 
-    if (client->loginName > data->loginPawd)
+    if (client->loginName > data->loginName)
     {
         return 1;
     }
@@ -95,6 +114,7 @@ void sigHander(int sig)
 
 #endif
 
+/* 读取客户端传输的登录名和密码 */
 void readNamePasswd(int acceptfd, struct clientNode * client)
 {
     ssize_t readBytes = read(acceptfd, client->loginName, sizeof(client->loginName));
@@ -117,6 +137,80 @@ void readNamePasswd(int acceptfd, struct clientNode * client)
     }
 
     printf("登录密码：%s\n", client->loginPawd);
+}
+
+/* 聊天室功能 */
+int chatRoomFunc(chatRoom * chat, clientNode * cliet)
+{
+    /* 通信句柄 */
+    int acceptfd = chat->communicateFd;
+    /* 在线列表 */
+    BalanceBinarySearchTree * onlineList = chat->online;
+
+    ssize_t readBytes = 0;
+    ssize_t writeBytes = 0;
+
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    int func_choice = 0;
+    while (1)
+    {
+        readBytes = read(acceptfd, &func_choice, sizeof(func_choice));
+        if (readBytes < 0)
+        {
+            perror("read error");
+            close(acceptfd);
+            return ERROR;
+        }
+
+        switch (func_choice)
+        {
+        /* 查看好友 */
+        case F_FRIEND_VIEW:
+            /* code */
+            break;
+
+        /* 添加好友 */
+        case F_FRIEND_INCREASE:
+            readBytes = read(acceptfd, nameBuffer, sizeof(nameBuffer));
+            if (readBytes < 0)
+            {
+                perror("read error");
+                close(acceptfd);
+                return ERROR;
+            }
+
+            clientNode * requestClient;
+            bzero(requestClient, sizeof(requestClient));
+            bzero(requestClient, sizeof(requestClient->loginName));
+            bzero(requestClient, sizeof(requestClient->loginPawd));
+
+            if (balanceBinarySearchTreeIsContainAppointVal(onlineList, requestClient))
+            {
+                AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, requestClient);
+                /* 给对方发送请求 todo.... */
+                /* 暂时只要在线就回复同意请求 */
+                int request = 1;
+                write(acceptfd, &request, sizeof(request));
+            }
+
+            /* 不在线 */
+            int request = 0;
+            write(acceptfd, &request, sizeof(request));
+
+            break;
+
+        /* 删除好友 */
+        case F_FRIEND_DELETE:
+            /* code */
+            break;
+        
+        default:
+            break;
+        }
+    }
+    
 }
 
 void * chatHander(void * arg)
@@ -147,6 +241,8 @@ void * chatHander(void * arg)
     bzero(client.loginName, sizeof(DEFAULT_LOGIN_NAME));
     bzero(client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
 
+    client.communicateFd = acceptfd;
+
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
@@ -169,8 +265,20 @@ void * chatHander(void * arg)
         case LOG_IN:
             readNamePasswd(acceptfd, &client);
 
+            /* 加锁 */
+            pthread_mutex_lock(&g_mutex);
+
             /* 插入在线列表 */
             balanceBinarySearchTreeInsert(onlineList, &client);
+
+            /* 解锁 */
+            pthread_mutex_unlock(&g_mutex);
+
+            // if(chatRoomFunc(chat, &client) < 0)
+            // {
+            //     close(acceptfd);
+            //     pthread_exit(NULL);
+            // }
 
             /* 打印在线列表 */
             balanceBinarySearchTreeLevelOrderTravel(onlineList);
@@ -189,7 +297,6 @@ void * chatHander(void * arg)
             {
                 printf("insert error: %s \n", errMsg);
                 close(acceptfd);
-                sqlite3_close(chatRoomDB);
                 pthread_exit(NULL);
             }
 
@@ -198,7 +305,6 @@ void * chatHander(void * arg)
             {
                 printf("write error:%s\n", errMsg);
                 close(acceptfd);
-                sqlite3_close(chatRoomDB);
                 pthread_exit(NULL);
             }
 
@@ -214,6 +320,13 @@ void * chatHander(void * arg)
 
         default:
             break;
+        }
+
+        /* 退出程序 */
+        if (choice == EXIT)
+        {
+            close(acceptfd);
+            pthread_exit(NULL);
         }
 
     }

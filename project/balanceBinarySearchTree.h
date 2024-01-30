@@ -45,6 +45,9 @@ int balanceBinarySearchTreeInsert(BalanceBinarySearchTree *pBstree, ELEMENTTYPE 
 /* 二叉搜索树是否包含指定的元素 */
 int balanceBinarySearchTreeIsContainAppointVal(BalanceBinarySearchTree *pBstree, ELEMENTTYPE val);
 
+/* 根据指定的值获取二叉搜索树的结点 */
+AVLTreeNode * baseAppointValGetAVLTreeNode(BalanceBinarySearchTree *pBstree, ELEMENTTYPE val);
+
 /* 二叉搜索树的前序遍历 */
 int balanceBinarySearchTreePreOrderTravel(BalanceBinarySearchTree *pBstree);
 

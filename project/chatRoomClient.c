@@ -196,9 +196,9 @@ int main()
 
             if (row > 0)
             {
-                write(socketfd, client.loginName, sizeof(client.loginName) - 1);
+                write(socketfd, client.loginName, sizeof(client.loginName));
 
-                write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
+                write(socketfd, client.loginPawd, sizeof(client.loginPawd));
 
                 chatRoomFunc(socketfd);
             }
@@ -211,58 +211,66 @@ int main()
         
         /* 注册 */
         case REGISTER:
-            printf("请输入你的登录名(不超过20个字符):\n");
-            scanf("%s", client.loginName);
-            while ((c = getchar()) != EOF && c != '\n');
-            
-            
-            sprintf(sql, "select id from user where (id = '%s')", client.loginName);
-            ret = sqlite3_get_table(chatRoomDB, sql, &result, &row, &column, &errMsg);
-            if (ret != SQLITE_OK)
+            while (1)
             {
-                printf("select error:%s\n", errMsg);
-                close(mainMenu);
-                close(socketfd);
-                exit(-1);
-            }
+                printf("请输入你的登录名(不超过20个字符):\n");
+                scanf("%s", client.loginName);
+                while ((c = getchar()) != EOF && c != '\n');
+                
+                
+                sprintf(sql, "select id from user where (id = '%s')", client.loginName);
+                ret = sqlite3_get_table(chatRoomDB, sql, &result, &row, &column, &errMsg);
+                if (ret != SQLITE_OK)
+                {
+                    printf("select error:%s\n", errMsg);
+                    close(mainMenu);
+                    close(socketfd);
+                    exit(-1);
+                }
 
-            if (row > 0)
-            {
-                printf("登录名已存在，请重新输入\n");
-                continue;
-            }
+                if (row > 0)
+                {
+                    printf("登录名已存在，请重新输入!\n");
+                    continue;
+                }
 
-            printf("请输入你的登陆密码：\n");
-            scanf("%s", client.loginPawd);
-            while ((c = getchar()) != EOF && c != '\n');
+                printf("请输入你的登陆密码：\n");
+                scanf("%s", client.loginPawd);
+                while ((c = getchar()) != EOF && c != '\n');
 
-            writeBytes = write(socketfd, client.loginName, sizeof(client.loginName) - 1);
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                close(mainMenu);
-                close(socketfd);
-                exit(-1);
+                writeBytes = write(socketfd, client.loginName, sizeof(client.loginName) - 1);
+                if (writeBytes < 0)
+                {
+                    perror("write error");
+                    close(mainMenu);
+                    close(socketfd);
+                    exit(-1);
+                }
+                writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
+                if (writeBytes < 0)
+                {
+                    perror("write error");
+                    close(mainMenu);
+                    close(socketfd);
+                    exit(-1);
+                }
+                readBytes = read(socketfd, buffer, sizeof(buffer));
+                if (readBytes < 0)
+                {
+                    perror("write error");
+                    close(mainMenu);
+                    close(socketfd);
+                    exit(-1);
+                }
+                printf("%s\n", buffer);
+                
+                if (readBytes > 0)
+                {
+                    chatRoomFunc(socketfd);
+                    break;
+                }
             }
-            writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                close(mainMenu);
-                close(socketfd);
-                exit(-1);
-            }
-            readBytes = read(socketfd, buffer, sizeof(buffer));
-            if (readBytes < 0)
-            {
-                perror("write error");
-                close(mainMenu);
-                close(socketfd);
-                exit(-1);
-            }
-            printf("%s\n", buffer);
             
-            chatRoomFunc(socketfd);
             
             break;
 

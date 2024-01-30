@@ -95,6 +95,30 @@ void sigHander(int sig)
 
 #endif
 
+void readNamePasswd(int acceptfd, struct clientNode * client)
+{
+    ssize_t readBytes = read(acceptfd, client->loginName, sizeof(client->loginName));
+    if (readBytes < 0)
+    {
+        perror("read error");
+        close(acceptfd);
+        pthread_exit(NULL);
+    }
+
+    printf("登录名：%s\n", client->loginName);
+
+    readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
+    if (readBytes < 0)
+    {
+        perror("read error");
+        close(acceptfd);
+        sqlite3_close(chatRoomDB);
+        pthread_exit(NULL);
+    }
+
+    printf("登录密码：%s\n", client->loginPawd);
+}
+
 void * chatHander(void * arg)
 {
     /* 线程分离 */
@@ -123,6 +147,10 @@ void * chatHander(void * arg)
     bzero(client.loginName, sizeof(DEFAULT_LOGIN_NAME));
     bzero(client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
 
+    /* 储存sql语句 */
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+
     /* 程序运行 */
     while (1)
     {
@@ -139,22 +167,7 @@ void * chatHander(void * arg)
         {
         /* 登录功能 */
         case LOG_IN:
-            readBytes = read(acceptfd, client.loginName, sizeof(client.loginName));
-            if (readBytes < 0)
-            {
-                perror("read error");
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
-
-            readBytes = read(acceptfd, client.loginPawd, sizeof(client.loginPawd));
-            if (readBytes < 0)
-            {
-                perror("read error");
-                close(acceptfd);
-                sqlite3_close(chatRoomDB);
-                pthread_exit(NULL);
-            }
+            readNamePasswd(acceptfd, &client);
 
             /* 插入在线列表 */
             balanceBinarySearchTreeInsert(onlineList, &client);
@@ -166,25 +179,8 @@ void * chatHander(void * arg)
         
         /* 注册功能 */
         case REGISTER:
-            readBytes = read(acceptfd, client.loginName, sizeof(client.loginName));
-            if (readBytes < 0)
-            {
-                perror("read error");
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
+            readNamePasswd(acceptfd, &client);
 
-            readBytes = read(acceptfd, client.loginPawd, sizeof(client.loginPawd));
-            if (readBytes < 0)
-            {
-                perror("read error");
-                close(acceptfd);
-                sqlite3_close(chatRoomDB);
-                pthread_exit(NULL);
-            }
-
-            char sql[BUFFER_SQL];
-            bzero(sql, sizeof(sql));
             sprintf(sql, "insert into user values('%s', '%s')", client.loginName, client.loginPawd);
             ret = sqlite3_exec(chatRoomDB, sql, NULL, NULL, &errMsg);
             if (ret != SQLITE_OK)

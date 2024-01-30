@@ -22,6 +22,9 @@
 #define DEFAULT_LOGIN_PAWD  16
 #define BUFFER_SQL          100
 
+/* 创建数据库句柄 */
+sqlite3 * chatRoomDB = NULL;
+
 enum CLIENT_CHOICE
 {
     LOG_IN = 1,
@@ -34,7 +37,7 @@ typedef struct chatRoom
     BalanceBinarySearchTree * online;
     int communicateFd;
     pthread_mutex_t mutex;
-    sqlite3 * ppDb;
+    // sqlite3 * ppDb;
 } chatRoom;
 
 typedef struct clientNode
@@ -68,6 +71,8 @@ int compareFunc(void * val1, void * val2)
 /* AVL打印器 */
 int printfFunc(void * val)
 {
+    clientNode * client = (clientNode *)val;
+    printf("在线用户登录名：%s\n", client->loginName);
 
 }
 
@@ -102,7 +107,7 @@ void * chatHander(void * arg)
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
     /* 数据库句柄 */
-    sqlite3 * chatRoomDB = chat->ppDb;
+    // sqlite3 * chatRoomDB = chat->ppDb;
 
     int choice = 0;
     int ret = 0;
@@ -129,18 +134,12 @@ void * chatHander(void * arg)
             close(acceptfd);
             pthread_exit(NULL);
         }
-        printf("%d\n", choice);
+
         switch (choice)
         {
         /* 登录功能 */
         case LOG_IN:
-            /* code */
-
-            break;
-        
-        /* 注册功能 */
-        case REGISTER:
-            readBytes = read(acceptfd, client.loginName, sizeof(DEFAULT_LOGIN_NAME));
+            readBytes = read(acceptfd, client.loginName, sizeof(client.loginName));
             if (readBytes < 0)
             {
                 perror("read error");
@@ -148,7 +147,34 @@ void * chatHander(void * arg)
                 pthread_exit(NULL);
             }
 
-            readBytes = read(acceptfd, client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
+            readBytes = read(acceptfd, client.loginPawd, sizeof(client.loginPawd));
+            if (readBytes < 0)
+            {
+                perror("read error");
+                close(acceptfd);
+                sqlite3_close(chatRoomDB);
+                pthread_exit(NULL);
+            }
+
+            /* 插入在线列表 */
+            balanceBinarySearchTreeInsert(onlineList, &client);
+
+            /* 打印在线列表 */
+            balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+            break;
+        
+        /* 注册功能 */
+        case REGISTER:
+            readBytes = read(acceptfd, client.loginName, sizeof(client.loginName));
+            if (readBytes < 0)
+            {
+                perror("read error");
+                close(acceptfd);
+                pthread_exit(NULL);
+            }
+
+            readBytes = read(acceptfd, client.loginPawd, sizeof(client.loginPawd));
             if (readBytes < 0)
             {
                 perror("read error");
@@ -170,15 +196,19 @@ void * chatHander(void * arg)
             }
 
             writeBytes = write(acceptfd, "注册成功！", sizeof("注册成功！"));
-            if (writeBytes < 0)
+            if (writeBytes == -1)
             {
-                printf("inster error:%s\n", errMsg);
+                printf("write error:%s\n", errMsg);
                 close(acceptfd);
                 sqlite3_close(chatRoomDB);
                 pthread_exit(NULL);
             }
 
             /* 插入在线列表 */
+            balanceBinarySearchTreeInsert(onlineList, &client);
+
+            /* 打印在线列表 */
+            balanceBinarySearchTreeLevelOrderTravel(onlineList);
 
             break;
 
@@ -194,15 +224,14 @@ void * chatHander(void * arg)
 int main()
 {
     /* 初始化线程池 */
-    threadPool pool;
+    // threadPool pool;
 
-    threadPoolInit(&pool, MIN_THREADS, MAX_THREADS, MAX_QUEUE_CAPACITY);
+    // threadPoolInit(&pool, MIN_THREADS, MAX_THREADS, MAX_QUEUE_CAPACITY);
 
     /* 初始化锁：用来实现对在线列表的互斥访问 */
     pthread_mutex_init(&g_mutex, NULL);
 
-    /* 创建数据库和表 */
-    sqlite3 * chatRoomDB = NULL;
+    
     /* 打开数据库 */
     int ret = sqlite3_open("chatRoom.db", &chatRoomDB);
     if (ret != SQLITE_OK)
@@ -220,7 +249,7 @@ int main()
         printf("create table error:%s\n", ermsg);
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -230,7 +259,7 @@ int main()
         perror("socket error");
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -254,7 +283,7 @@ int main()
         close(socketfd);
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -266,7 +295,7 @@ int main()
         close(socketfd);
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -277,7 +306,7 @@ int main()
         close(socketfd);
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -291,7 +320,7 @@ int main()
         close(socketfd);
         sqlite3_close(chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
-        threadPoolDestroy(&pool);
+        // threadPoolDestroy(&pool);
         exit(-1);
     }
 
@@ -314,7 +343,9 @@ int main()
         chat.communicateFd = acceptfd;
 
         /* 向线程池中插入线程执行函数 */
-        taskQueueInsert(&pool, chatHander, (void *)&chat);
+        pthread_t tid;
+        pthread_create(&tid, NULL, chatHander, (void *)&chat);
+        // taskQueueInsert(&pool, chatHander, (void *)&chat);
     }
 
 #if 0
@@ -333,7 +364,7 @@ int main()
     pthread_mutex_destroy(&g_mutex);
     balanceBinarySearchTreeDestroy(onlineList);
     sqlite3_close(chatRoomDB);
-    threadPoolDestroy(&pool);
+    // threadPoolDestroy(&pool);
 
     return 0;
 }

@@ -150,6 +150,10 @@ int main()
     char buffer[BUFFER_SIZE];
     bzero(buffer, sizeof(buffer));
 
+    /* 数据库语句 */
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+
     /* 开始执行功能 */
     while (1)
     {
@@ -172,7 +176,37 @@ int main()
 
         /* 登录 */
         case LOG_IN:
-            
+            printf("请输入你的登录名(不超过20个字符):\n");
+            scanf("%s", client.loginName);
+            while ((c = getchar()) != EOF && c != '\n');
+
+            printf("请输入你的登陆密码：\n");
+            scanf("%s", client.loginPawd);
+            while ((c = getchar()) != EOF && c != '\n');
+
+            sprintf(sql, "select id = '%s' from user where password = '%s'", client.loginName, client.loginPawd);
+            ret = sqlite3_get_table(chatRoomDB, sql, &result, &row, &column, &errMsg);
+            if (ret != SQLITE_OK)
+            {
+                printf("select error : %s\n", errMsg);
+                close(mainMenu);
+                close(socketfd);
+                exit(-1);
+            }
+
+            if (row > 0)
+            {
+                write(socketfd, client.loginName, sizeof(client.loginName) - 1);
+
+                write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
+
+                chatRoomFunc(socketfd);
+            }
+            else
+            {
+                printf("登录名或密码错误，请重新输入\n");
+            }
+
             break;
         
         /* 注册 */
@@ -181,8 +215,7 @@ int main()
             scanf("%s", client.loginName);
             while ((c = getchar()) != EOF && c != '\n');
             
-            char sql[BUFFER_SQL];
-            bzero(sql, sizeof(sql));
+            
             sprintf(sql, "select id from user where (id = '%s')", client.loginName);
             ret = sqlite3_get_table(chatRoomDB, sql, &result, &row, &column, &errMsg);
             if (ret != SQLITE_OK)
@@ -203,19 +236,7 @@ int main()
             scanf("%s", client.loginPawd);
             while ((c = getchar()) != EOF && c != '\n');
 
-            // sprintf(sql, "insert into user values('%s', '%s')", client.loginName, client.loginPawd);
-            // printf("%s", sql);
-            // ret = sqlite3_exec(chatRoomDB, sql, NULL, NULL, &errMsg);
-            // if (ret != SQLITE_OK)
-            // {
-            //     printf("insert error: %s \n", errMsg);
-            //     // close(acceptfd);
-            //     sqlite3_close(chatRoomDB);
-            //     // pthread_exit(NULL);
-            // }
-            // printf("插入数据成功\n");
-
-            writeBytes = write(socketfd, client.loginName, sizeof(DEFAULT_LOGIN_NAME));
+            writeBytes = write(socketfd, client.loginName, sizeof(client.loginName) - 1);
             if (writeBytes < 0)
             {
                 perror("write error");
@@ -223,7 +244,7 @@ int main()
                 close(socketfd);
                 exit(-1);
             }
-            writeBytes = write(socketfd, client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
+            writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
             if (writeBytes < 0)
             {
                 perror("write error");
@@ -231,27 +252,16 @@ int main()
                 close(socketfd);
                 exit(-1);
             }
-
-            while (1)
+            readBytes = read(socketfd, buffer, sizeof(buffer));
+            if (readBytes < 0)
             {
-                readBytes = read(socketfd, buffer, sizeof(buffer));
-                if (readBytes < 0)
-                {
-                    perror("write error");
-                    close(mainMenu);
-                    close(socketfd);
-                    exit(-1);
-                }
-                if (readBytes == 0)
-                {
-                    printf("接收完毕：\n");
-                    break;
-                }
-
-                printf("%s\n", buffer);
+                perror("write error");
+                close(mainMenu);
+                close(socketfd);
+                exit(-1);
             }
+            printf("%s\n", buffer);
             
-
             chatRoomFunc(socketfd);
             
             break;

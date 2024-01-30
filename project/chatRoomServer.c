@@ -175,6 +175,8 @@ void * chatHander(void * arg)
             /* 打印在线列表 */
             balanceBinarySearchTreeLevelOrderTravel(onlineList);
 
+            choice = 0;
+
             break;
         
         /* 注册功能 */
@@ -205,6 +207,8 @@ void * chatHander(void * arg)
 
             /* 打印在线列表 */
             balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+            choice = 0;
 
             break;
 

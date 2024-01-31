@@ -22,6 +22,8 @@
 /* 建立数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
 
+
+
 enum CLIENT_CHOICE
 {
     LOG_IN = 1,
@@ -125,7 +127,30 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            
+            printf("全部好友:\n");
+            sprintf(sql, "select * from friend");
+            ret = sqlite3_get_table(clientMsgDB, sql, &result, &row, &column, &errMsg);
+            if (ret != SQLITE_OK)
+            {
+                printf("select error : %s\n", errMsg);
+                close(funcMenu);
+                close(friendList);
+                return ERROR;
+            }
+            if (row == 0)
+            {
+                printf("你当前没有好友！");
+            }
+            else
+            {            
+                for (int idx = 0; idx <= row; idx++)
+                {
+                    for (int jdx = 0; jdx < column; jdx++)
+                    {
+                        printf("id: %s\n", result[(idx * column) + jdx]);
+                    }
+                }
+            }
             break;
 
         /* 添加好友 */
@@ -248,9 +273,6 @@ int main()
     char ** result = NULL;
     int row = 0;
     int column = 0;
-
-    /* 存储数据库错误信息 */
-    char * errMsg = NULL;
 
     ssize_t writeBytes = 0;
     ssize_t readBytes = 0;

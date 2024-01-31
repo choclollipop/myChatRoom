@@ -24,6 +24,8 @@
 
 /* 创建数据库句柄 */
 sqlite3 * chatRoomDB = NULL;
+/* 创建一个客户端存放好友信息的数据库 */
+sqlite3 * clientMsgDB = NULL;
 
 /* 主界面选择 */
 enum CLIENT_CHOICE
@@ -171,6 +173,32 @@ int chatRoomFunc(chatRoom * chat, clientNode * cliet)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
+            printf("全部好友:\n");
+            sprintf(sql, "select * from friend");
+            ret = sqlite3_get_table(clientMsgDB, sql, &result, &row, &column, &errMsg);
+            if (ret != SQLITE_OK)
+            {
+                printf("select error : %s\n", errMsg);
+                close(funcMenu);
+                close(friendList);
+                return ERROR;
+            }
+            if (row == 0)
+            {
+                printf("你当前没有好友！");
+            }
+            else
+            {            
+                for (int idx = 0; idx <= row; idx++)
+                {
+                    for (int jdx = 0; jdx < column; jdx++)
+                    {
+                        printf("id: %s\n", result[(idx * column) + jdx]);
+                    }
+                }
+            }
+            break;
+
             /* code */
             break;
 
@@ -371,6 +399,32 @@ int main()
         // threadPoolDestroy(&pool);
         exit(-1);
     }
+
+        /* 打开数据库 */
+    ret = sqlite3_open("clientMsg.db", &clientMsgDB);
+    if (ret != SQLITE_OK)
+    {
+        perror("sqlite open error");
+        close(mainMenu);
+        close(socketfd);
+        sqlite3_close(clientMsgDB);
+        exit(-1);
+    }
+    /* 创建储存好友的表 */
+    /* 存储数据库错误信息 */
+    char * errMsg = NULL;
+    const char * sql = "create table if not exists friend (id text primary key not null)";
+    ret = sqlite3_exec(clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        sqlite3_close(clientMsgDB);
+        sqlite3_close(g_chatRoomDB);
+        close(mainMenu);
+        close(socketfd);
+        exit(-1);
+    }
+
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
     if (socketfd == -1)

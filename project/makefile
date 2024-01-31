@@ -7,10 +7,10 @@ LDFALGS=-L./src_so -L./src_so2
 LIBS=-lAVLTree -lMythreadPool
 
 $(TARFET):$(OBJ)
-	$(CC) -g $^ $(LIBS) $(LDFALGS) -o $@ -lsqlite3
+	$(CC) -g $^ $(LIBS) $(LDFALGS) -o $@ -lsqlite3 -ljson-c
 
 $(TARGET):$(OBJECT)
-	$(CC) -g $^ $(LIBS) $(LDFALGS) -o $@ -lsqlite3
+	$(CC) -g $^ $(LIBS) $(LDFALGS) -o $@ -lsqlite3 -ljson-c
 
 %.o:%.c
 	gcc -c $^ -o $@

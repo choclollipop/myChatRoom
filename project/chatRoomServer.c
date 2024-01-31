@@ -11,6 +11,7 @@
 #include <sqlite3.h>
 #include <signal.h>
 #include <string.h>
+#include <json-c/json.h>
 
 #define SERVER_PORT     8080
 #define LISTEN_MAX      128
@@ -24,6 +25,8 @@
 #define BUFFER_SQL          100
 #define FLUSH_BUFFER        10
 #define DEFAULT_DATABASE    25
+#define DEFAULT_CHAT        401
+#define DEFAULT_LEN         40
 
 /* 创建数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
@@ -201,6 +204,12 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         return ERROR;
     }
 
+    /* 创建请求对象 */
+    clientNode requestClient;
+    bzero(&requestClient, sizeof(requestClient));
+    bzero(&requestClient, sizeof(requestClient.loginName));
+    bzero(&requestClient, sizeof(requestClient.loginPawd));
+
     printf("创建数据库\n");
 
     int func_choice = 0;
@@ -277,11 +286,6 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
                 return ERROR;
             }
 
-            clientNode * requestClient;
-            bzero(requestClient, sizeof(requestClient));
-            bzero(requestClient, sizeof(requestClient->loginName));
-            bzero(requestClient, sizeof(requestClient->loginPawd));
-
             if (balanceBinarySearchTreeIsContainAppointVal(onlineList, requestClient))
             {
                 AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, requestClient);
@@ -301,7 +305,91 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         case F_FRIEND_DELETE:
             /* code */
             break;
-        
+
+        case F_PRIVATE_CHAT:
+
+            char ptrObj[DEFAULT_LEN];
+            bzero(ptrObj, sizeof(ptrObj));
+            /* 将字符串转换成json对象 */
+            struct json_object * requestObj = json_tokener_parse(ptrObj);
+            /* 取用户名 */
+            const char * requesrPtr = json_object_get_string(requestObj);
+
+            strncpy(client->loginName, requesrPtr, sizeof(requesrPtr) + 1);
+
+            /* 关闭json对象 */
+            json_object_put(requestObj);
+
+            int DidOnlien = 0;
+
+            if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&requestClient))
+            {
+                DidOnlien = 1;
+                write(acceptfd, &DidOnlien, sizeof(DidOnlien));
+                AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient);
+                if (onlineNode == NULL)
+                {
+                    perror("get node error");
+                    close(acceptfd);
+                    sqlite3_close(g_clientMsgDB);
+                    return ERROR;
+                }
+
+                requestClient = *(clientNode *)onlineNode->data;
+                /* 请求通信对象的通信句柄 */
+                int requestfd = requestClient.communicateFd;
+                /* 给对方发送请求 todo.... */
+                /* 暂时只要在线就回复同意请求 */
+                int request = 0;
+                write(acceptfd, &request, sizeof(request));
+
+                char chatBuffer[DEFAULT_CHAT];
+                bzero(chatBuffer, sizeof(chatBuffer));
+
+                /* 同意会话 */
+                while (request)
+                {
+                    readBytes = read(acceptfd, chatBuffer, sizeof(chatBuffer));
+                    if (readBytes < 0)
+                    {
+                        perror("read error");
+                        close(acceptfd);
+                        sqlite3_close(g_clientMsgDB);
+                        return ERROR;
+                    }
+                    
+                    /* 接收到退出标志 */
+                    if(!strncmp(chatBuffer, "q", sizeof("q")))
+                    {
+                        write(requestfd, "q", sizeof("q"));
+                        break;
+                    }
+
+                    writeBytes = write(requestfd, chatBuffer, sizeof(chatBuffer));
+                    if (readBytes < 0)
+                    {
+                        perror("read error");
+                        close(acceptfd);
+                        sqlite3_close(g_clientMsgDB);
+                        return ERROR;
+                    }
+
+                    read(requestfd, chatBuffer, sizeof(chatBuffer));
+                    if(!strncmp(chatBuffer, "q", sizeof("q")))
+                    {
+                        write(acceptfd, "q", sizeof("q"));
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                /* 不在线 */
+                write(acceptfd, &DidOnlien, sizeof(DidOnlien));
+            }
+
+            break;
+
         default:
             break;
         }

@@ -21,9 +21,10 @@
 #define DEFAULT_LOGIN_NAME  20
 #define DEFAULT_LOGIN_PAWD  16
 #define BUFFER_SQL          100
+#define FLUSH_BUFFER        10
 
 /* 创建数据库句柄 */
-sqlite3 * chatRoomDB = NULL;
+sqlite3 * g_chatRoomDB = NULL;
 /* 创建一个客户端存放好友信息的数据库 */
 sqlite3 * clientMsgDB = NULL;
 
@@ -129,18 +130,25 @@ void readNamePasswd(int acceptfd, struct clientNode * client)
 
     printf("登录名：%s\n", client->loginName);
 
+    /* 清空缓冲区 */
+    char flushBuffer[FLUSH_BUFFER];
+    bzero(flushBuffer, sizeof(flushBuffer));
+    read(acceptfd, flushBuffer, sizeof(flushBuffer));
+
     readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
     if (readBytes < 0)
     {
         perror("read error");
         close(acceptfd);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
         pthread_exit(NULL);
     }
 
     printf("登录密码：%s\n", client->loginPawd);
 }
 
+
+#if 0
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * cliet)
 {
@@ -246,6 +254,8 @@ int chatRoomFunc(chatRoom * chat, clientNode * cliet)
     }
     
 }
+#endif
+
 
 void * chatHander(void * arg)
 {
@@ -259,7 +269,7 @@ void * chatHander(void * arg)
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
     /* 数据库句柄 */
-    // sqlite3 * chatRoomDB = chat->ppDb;
+    // sqlite3 * g_chatRoomDB = chat->ppDb;
 
     int choice = 0;
     int ret = 0;
@@ -281,6 +291,11 @@ void * chatHander(void * arg)
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
+    /* 存储查询结果 */
+    char ** result = NULL;
+    int row = 0;
+    int column = 0;
+
     /* 程序运行 */
     while (1)
     {
@@ -297,27 +312,69 @@ void * chatHander(void * arg)
         {
         /* 登录功能 */
         case LOG_IN:
-            readNamePasswd(acceptfd, &client);
+            int flag = 0;
+            do {
 
-            /* 加锁 */
-            pthread_mutex_lock(&g_mutex);
+                readNamePasswd(acceptfd, &client);
 
-            /* 插入在线列表 */
-            balanceBinarySearchTreeInsert(onlineList, &client);
+                printf("name : %s\n", client.loginName);
+                /* 判断用户输入是否正确 */
+                sprintf(sql, "select id = '%s' from user where password = '%s'", client.loginName, client.loginPawd);
+                ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+                if (ret != SQLITE_OK)
+                {
+                    printf("select error : %s\n", errMsg);
+                    close(acceptfd);
+                    pthread_exit(NULL);
+                }
 
-            /* 解锁 */
-            pthread_mutex_unlock(&g_mutex);
+                /* id和密码输入正确 */
+                if (row > 0)
+                {
+                    /* 加锁 */
+                    pthread_mutex_lock(&g_mutex);
 
-            /* 打印在线列表 */
-            balanceBinarySearchTreeLevelOrderTravel(onlineList);
+                    /* 插入在线列表 */
+                    balanceBinarySearchTreeInsert(onlineList, &client);
 
-            if(chatRoomFunc(chat, &client) < 0)
-            {
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
+                    /* 解锁 */
+                    pthread_mutex_unlock(&g_mutex);
 
-            choice = 0;
+                    writeBytes = write(acceptfd, "登录成功！\n", sizeof("登录成功！\n"));
+                    if (writeBytes < 0)
+                    {
+                        perror("write error");
+                        close(acceptfd);
+                        pthread_exit(NULL);
+                    }
+                    flag = 0;
+                }
+                else
+                {
+                    writeBytes = write(acceptfd, "用户名或密码输入错误，请重新输入\n", sizeof("用户名或密码输入错误，请重新输入\n"));
+                    if (writeBytes < 0)
+                    {
+                        perror("write error");
+                        close(acceptfd);
+                        pthread_exit(NULL);
+                    }
+                    flag = 1;
+                    continue;
+                }
+
+                /* 打印在线列表 */
+                balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+                // if(chatRoomFunc(chat, &client) < 0)
+                // {
+                //     close(acceptfd);
+                //     pthread_exit(NULL);
+                // }
+
+                choice = 0;
+
+            }while (flag);
+            
 
             break;
         
@@ -326,7 +383,7 @@ void * chatHander(void * arg)
             readNamePasswd(acceptfd, &client);
 
             sprintf(sql, "insert into user values('%s', '%s')", client.loginName, client.loginPawd);
-            ret = sqlite3_exec(chatRoomDB, sql, NULL, NULL, &errMsg);
+            ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, &errMsg);
             if (ret != SQLITE_OK)
             {
                 printf("insert error: %s \n", errMsg);
@@ -380,7 +437,7 @@ int main()
 
     
     /* 打开数据库 */
-    int ret = sqlite3_open("chatRoom.db", &chatRoomDB);
+    int ret = sqlite3_open("chatRoom.db", &g_chatRoomDB);
     if (ret != SQLITE_OK)
     {
         perror("sqlite open error");
@@ -390,11 +447,11 @@ int main()
     /* 创建储存所有用户的表 */
     char * ermsg = NULL;
     const char * sql = "create table if not exists user (id text primary key not null, password text not null)";
-    ret = sqlite3_exec(chatRoomDB, sql, NULL, NULL, &ermsg);
+    ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, &ermsg);
     if (ret != SQLITE_OK)
     {
         printf("create table error:%s\n", ermsg);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -405,23 +462,21 @@ int main()
     if (ret != SQLITE_OK)
     {
         perror("sqlite open error");
-        close(mainMenu);
-        close(socketfd);
-        sqlite3_close(clientMsgDB);
+        sqlite3_close(g_chatRoomDB);
+        pthread_mutex_destroy(&g_mutex);
         exit(-1);
     }
     /* 创建储存好友的表 */
     /* 存储数据库错误信息 */
     char * errMsg = NULL;
-    const char * sql = "create table if not exists friend (id text primary key not null)";
+    sql = "create table if not exists friend (id text primary key not null)";
     ret = sqlite3_exec(clientMsgDB, sql, NULL, NULL, &errMsg);
     if (ret != SQLITE_OK)
     {
         printf("create table error:%s\n", errMsg);
         sqlite3_close(clientMsgDB);
         sqlite3_close(g_chatRoomDB);
-        close(mainMenu);
-        close(socketfd);
+        pthread_mutex_destroy(&g_mutex);
         exit(-1);
     }
 
@@ -430,7 +485,8 @@ int main()
     if (socketfd == -1)
     {
         perror("socket error");
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
+        sqlite3_close(clientMsgDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -454,7 +510,8 @@ int main()
     {
         perror("setsockopt error");
         close(socketfd);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
+        sqlite3_close(clientMsgDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -466,7 +523,8 @@ int main()
     {
         perror("bind error");
         close(socketfd);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
+        sqlite3_close(clientMsgDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -477,7 +535,8 @@ int main()
     {
         perror("listen error");
         close(socketfd);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
+        sqlite3_close(clientMsgDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -491,7 +550,8 @@ int main()
     {
         perror("create online list error");
         close(socketfd);
-        sqlite3_close(chatRoomDB);
+        sqlite3_close(g_chatRoomDB);
+        sqlite3_close(clientMsgDB);
         pthread_mutex_destroy(&g_mutex);
         // threadPoolDestroy(&pool);
         exit(-1);
@@ -536,7 +596,8 @@ int main()
     
     pthread_mutex_destroy(&g_mutex);
     balanceBinarySearchTreeDestroy(onlineList);
-    sqlite3_close(chatRoomDB);
+    sqlite3_close(g_chatRoomDB);
+    sqlite3_close(clientMsgDB);
     // threadPoolDestroy(&pool);
 
     return 0;

@@ -54,6 +54,8 @@ typedef struct clientNode
     char loginPawd[DEFAULT_LOGIN_PAWD];
 } clientNode;
 
+
+#if 0
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
     ssize_t writeBytes = 0;
@@ -206,6 +208,8 @@ int chatRoomFunc(int socketfd, const clientNode* client)
 
     return  ON_SUCCESS;
 }
+#endif
+
 
 int main()
 {
@@ -307,36 +311,65 @@ int main()
 
         /* 登录 */
         case LOG_IN:
-            printf("请输入你的登录名(不超过20个字符):\n");
-            scanf("%s", client.loginName);
-            while ((c = getchar()) != EOF && c != '\n');
-
-            printf("请输入你的登陆密码：\n");
-            scanf("%s", client.loginPawd);
-            while ((c = getchar()) != EOF && c != '\n');
-
-            sprintf(sql, "select id = '%s' from user where password = '%s'", client.loginName, client.loginPawd);
-            ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
-            if (ret != SQLITE_OK)
+            int flag = 0;
+            do
             {
-                printf("select error : %s\n", errMsg);
-                close(mainMenu);
-                close(socketfd);
-                exit(-1);
-            }
+                printf("请输入你的登录名(不超过20个字符):\n");
+                scanf("%s", client.loginName);
+                while ((c = getchar()) != EOF && c != '\n');
 
-            if (row > 0)
-            {
-                write(socketfd, client.loginName, sizeof(client.loginName));
+                writeBytes = write(socketfd, client.loginName, sizeof(client.loginName));
+                if (writeBytes < 0)
+                {
+                    perror("write error");
+                    close(socketfd);
+                    close(mainMenu);
+                    exit(-1);
+                }
 
-                write(socketfd, client.loginPawd, sizeof(client.loginPawd));
+                printf("请输入你的登陆密码：\n");
+                scanf("%s", client.loginPawd);
+                while ((c = getchar()) != EOF && c != '\n');
 
-                chatRoomFunc(socketfd, &client);
-            }
-            else
-            {
-                printf("登录名或密码错误，请重新输入\n");
-            }
+                writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd));
+                if (writeBytes < 0)
+                {
+                    perror("write error");
+                    close(socketfd);
+                    close(mainMenu);
+                    exit(-1);
+                }
+
+                readBytes = read(socketfd, buffer, sizeof(buffer));
+                if (readBytes < 0)
+                {
+                    perror("read error");
+                    close(socketfd);
+                    close(mainMenu);
+                    exit(-1);
+                }
+
+                ret = strncmp("登录成功！\n", buffer, sizeof("登录成功！\n"));
+                if (ret == 0)
+                {
+                    /* 相等，登录成功 */
+                    printf("%s", buffer);
+                    flag = 0;
+
+                    break;
+
+                    // if (chatRoomFunc(socketfd, &client) < 0)
+                    // {
+                    //     break;
+                    // }
+                }
+                else
+                {
+                    printf("%s", buffer);
+                    flag = 1;
+                }
+
+            } while (flag);
 
             break;
         
@@ -350,10 +383,11 @@ int main()
                 
                 
                 sprintf(sql, "select id from user where (id = '%s')", client.loginName);
-                ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+                ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, NULL);
                 if (ret != SQLITE_OK)
                 {
-                    printf("select error:%s\n", errMsg);
+                    printf("有错误，第387行\n");
+                    // printf("select error:%s\n", errMsg);
                     close(mainMenu);
                     close(socketfd);
                     exit(-1);
@@ -397,7 +431,7 @@ int main()
                 
                 if (readBytes > 0)
                 {
-                    chatRoomFunc(socketfd, &client);
+                    // chatRoomFunc(socketfd, &client);
                     break;
                 }
             }

@@ -38,4 +38,6 @@ int chatRoomServerLoginIn(int socketfd, clientNode *client, BalanceBinarySearchT
 /* 服务器注册 */
 int chatRoomServerRegister(int socketfd, clientNode *client, BalanceBinarySearchTree * onlineList);
 
+int chatRoomServerSearchFriends();
+
 #endif

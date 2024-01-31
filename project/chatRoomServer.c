@@ -151,7 +151,7 @@ void sigHander(int sig)
 
 #endif
 
-/* 读取客户端传输的登录名和密码 */
+/* 读取客户端传输的登录名 */
 void readName(int acceptfd, struct clientNode * client)
 {
     ssize_t readBytes = read(acceptfd, client->loginName, sizeof(client->loginName));
@@ -170,6 +170,7 @@ void readName(int acceptfd, struct clientNode * client)
     read(acceptfd, flushBuffer, sizeof(flushBuffer));
 }
 
+/* 读取客户端传输的密码 */
 void readPasswd(int acceptfd, struct clientNode * client)
 {
     ssize_t readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
@@ -364,9 +365,50 @@ int chatRoomServerRegister(int socketfd, clientNode *client, BalanceBinarySearch
 
     return ON_SUCCESS;
 }
+/* 查看好友列表 */
+int chatRoomServerSearchFriends()
+{
+    /* 存储查询结果 */
+    char ** result = NULL;
+    int row = 0;
+    int column = 0;
+    int choice = 0;
 
+    ssize_t readBytes = 0;
+    ssize_t writeBytes = 0;
+    char * errMsg = NULL;
 
-#if 0
+    /* 储存sql语句 */
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+
+    int ret = 0;
+
+    printf("全部好友:\n");
+    sprintf(sql, "select * from friend");
+    ret = sqlite3_get_table(clientMsgDB, sql, &result, &row, &column, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("select error : %s\n", errMsg);
+        return ERROR;
+    }
+    if (row == 0)
+    {
+        printf("你当前没有好友！");
+    }
+    else
+    {            
+        for (int idx = 0; idx <= row; idx++)
+        {
+            for (int jdx = 0; jdx < column; jdx++)
+            {
+                printf("id: %s\n", result[(idx * column) + jdx]);
+            }
+        }
+    }
+}
+
+#if 1
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * cliet)
 {
@@ -399,33 +441,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * cliet)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            printf("全部好友:\n");
-            sprintf(sql, "select * from friend");
-            ret = sqlite3_get_table(clientMsgDB, sql, &result, &row, &column, &errMsg);
-            if (ret != SQLITE_OK)
-            {
-                printf("select error : %s\n", errMsg);
-                close(funcMenu);
-                close(friendList);
-                return ERROR;
-            }
-            if (row == 0)
-            {
-                printf("你当前没有好友！");
-            }
-            else
-            {            
-                for (int idx = 0; idx <= row; idx++)
-                {
-                    for (int jdx = 0; jdx < column; jdx++)
-                    {
-                        printf("id: %s\n", result[(idx * column) + jdx]);
-                    }
-                }
-            }
-            break;
-
-            /* code */
+            
             break;
 
         /* 添加好友 */
@@ -586,7 +602,7 @@ int main()
         exit(-1);
     }
 
-        /* 打开数据库 */
+    /* ⭐打开数据库 */
     ret = sqlite3_open("clientMsg.db", &clientMsgDB);
     if (ret != SQLITE_OK)
     {
@@ -595,7 +611,7 @@ int main()
         pthread_mutex_destroy(&g_mutex);
         exit(-1);
     }
-    /* 创建储存好友的表 */
+    /* ⭐创建储存好友的表 */
     /* 存储数据库错误信息 */
     char * errMsg = NULL;
     sql = "create table if not exists friend (id text primary key not null)";

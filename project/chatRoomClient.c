@@ -20,6 +20,7 @@
 
 /* 建立数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
+sqlite3 * g_clientMsgDB = NULL;
 
 
 
@@ -46,6 +47,30 @@ enum STATUS_CODE
     ON_SUCCESS,
     ERROR = -1,
 };
+
+int compareFunc(void * val1, void * val2)
+{
+    clientNode * client = (clientNode *)val1;
+    clientNode * data = (clientNode *)val2;
+
+    if (client->loginName > data->loginName)
+    {
+        return 1;
+    }
+    else if (client->loginName < data->loginName)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+/* AVL打印器 */
+int printfFunc(void * val)
+{
+    clientNode * client = (clientNode *)val;
+    printf("id : %s\n", client->loginName);
+}
 
 /* 客户端的初始化 */
 int chatRoomClientInit(int socketfd)
@@ -217,7 +242,7 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
 
 }
 
-#if 0
+#if 1
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
     ssize_t writeBytes = 0;
@@ -244,13 +269,13 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     }
 
     /* 创建好友列表文件 */
-    int friendList = open("./friendList.txt", O_RDWR | O_CREAT);
-    if (friendList == -1)
-    {
-        perror("open funcMenu error");
-        close(funcMenu);
-        return ERROR;
-    }
+    // int friendList = open("./friendList.txt", O_RDWR | O_CREAT);
+    // if (friendList == -1)
+    // {
+    //     perror("open funcMenu error");
+    //     close(funcMenu);
+    //     return ERROR;
+    // }
     // char friendListBuffer[]
 
     int choice = 0;
@@ -283,7 +308,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
             perror("write error");
             close(funcMenu);
-            close(friendList);
+            //close(friendList);
             return ERROR;
         }
 
@@ -293,12 +318,12 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         case F_FRIEND_VIEW:
             printf("全部好友:\n");
             sprintf(sql, "select * from friend");
-            ret = sqlite3_get_table(clientMsgDB, sql, &result, &row, &column, &errMsg);
+            ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
             if (ret != SQLITE_OK)
             {
                 printf("select error : %s\n", errMsg);
                 close(funcMenu);
-                close(friendList);
+                //close(friendList);
                 return ERROR;
             }
             if (row == 0)

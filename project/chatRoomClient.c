@@ -54,7 +54,13 @@ typedef struct clientNode
 
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
+    ssize_t writeBytes = 0;
+    ssize_t readBytes = 0;
+
     /* 登录后/注册后打开功能页面 */
+    //测试
+    printf("功能界面\n");
+
     int funcMenu = open("funcMenu", O_RDONLY);
     if (funcMenu == -1)
     {
@@ -63,29 +69,33 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     }
     char funcMenuBuffer[BUFFER_SIZE];
     bzero(funcMenuBuffer, sizeof(funcMenuBuffer));
-    read(funcMenu, funcMenuBuffer, sizeof(funcMenuBuffer));
+    readBytes = read(funcMenu, funcMenuBuffer, sizeof(funcMenuBuffer));
+    if (readBytes < 0)
+    {
+        perror("read error\n");
+        close(funcMenu);
+        return ERROR;
+    }
 
     /* 创建好友列表文件 */
-    int friendList = open("./frientList.txt", O_RDWR | O_CREAT);
+    int friendList = open("./friendList.txt", O_RDWR | O_CREAT);
     if (friendList == -1)
     {
         perror("open funcMenu error");
         close(funcMenu);
         return ERROR;
     }
+    // char friendListBuffer[]
 
     int choice = 0;
     int ret = 0;
     char c = '0';
 
-    ssize_t writeBytes = 0;
-    ssize_t readBytes = 0;
-
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
     char writeBuffer[BUFFER_SIZE];
-    bzero(write, sizeof(writeBuffer));
+    bzero(writeBuffer, sizeof(writeBuffer));
 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));

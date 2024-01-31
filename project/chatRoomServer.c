@@ -154,6 +154,9 @@ int chatRoomFunc(chatRoom * chat, clientNode * cliet)
     bzero(nameBuffer, sizeof(nameBuffer));
 
     int func_choice = 0;
+
+    //测试
+    printf("功能界面\n");
     while (1)
     {
         readBytes = read(acceptfd, &func_choice, sizeof(func_choice));
@@ -173,6 +176,9 @@ int chatRoomFunc(chatRoom * chat, clientNode * cliet)
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
+            //测试
+            printf("添加好友功能\n");
+
             readBytes = read(acceptfd, nameBuffer, sizeof(nameBuffer));
             if (readBytes < 0)
             {
@@ -274,14 +280,14 @@ void * chatHander(void * arg)
             /* 解锁 */
             pthread_mutex_unlock(&g_mutex);
 
-            // if(chatRoomFunc(chat, &client) < 0)
-            // {
-            //     close(acceptfd);
-            //     pthread_exit(NULL);
-            // }
-
             /* 打印在线列表 */
             balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+            if(chatRoomFunc(chat, &client) < 0)
+            {
+                close(acceptfd);
+                pthread_exit(NULL);
+            }
 
             choice = 0;
 

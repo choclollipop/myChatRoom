@@ -12,6 +12,7 @@
 #include <string.h>
 #include "chatRoomClient.h"
 #include "balanceBinarySearchTree.h"
+#include <json-c/json.h>
 
 
 #define SERVER_PORT 8080
@@ -252,38 +253,38 @@ int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
 {
     ssize_t readBytes = 0;
 
-    char buffer[BUFFER_SIZE];
-    bzero(buffer, sizeof(buffer));
+    const char * friendListVal = NULL; 
 
-    readBytes = read(socketfd, buffer, sizeof(buffer));
+    int row = 0;
+    readBytes = read(socketfd, &row, sizeof(int) * row);
     if (readBytes < 0)
     {
         perror("read error");
         return ERROR;
     }
 
-    int ret = strncmp("当前没有好友！\n", buffer, sizeof("当前没有好友！\n"));
-    if (ret == 0)
+    if (row == 0)
     {
-        return NULL_FRIEND;
+        printf("当前没有好友！\n");
     }
     else
     {
-        balanceBinarySearchTreeInsert(friendTree, (void *)buffer);
         while (1)
         {
             clientNode friend;
-            readBytes = read(socketfd, &friend.loginName, sizeof(friend.loginName));
+            readBytes = read(socketfd, friendListVal, strlen(friendListVal));
             if (readBytes < 0)
             {
                 perror("read error");
                 return ERROR;
             }
-            if (friend.loginName == NULL)
+            else
             {
-                return ON_SUCCESS;
+                struct json_object *friendList = json_tokener_parse(friendListVal);
+                struct json_object *id = json_object_object_get(friendListVal, "id");
+                balanceBinarySearchTreeInsert(friendTree, (void *)&id);
             }
-            balanceBinarySearchTreeInsert(friendTree, (void *)friend.loginName);
+            balanceBinarySearchTreeInOrderTravel(friendTree);
         }
     }
     
@@ -305,6 +306,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     }
     char funcMenuBuffer[BUFFER_SIZE];
     bzero(funcMenuBuffer, sizeof(funcMenuBuffer));
+
     readBytes = read(funcMenu, funcMenuBuffer, sizeof(funcMenuBuffer));
     if (readBytes < 0)
     {
@@ -350,6 +352,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         printf("请输入你需要的功能：\n");
         scanf("%d", &choice);
         while ((c = getchar()) != EOF && c != '\n');
+        /* ⭐发送选择的功能 */
         writeBytes = write(socketfd, &choice, sizeof(choice));
         if (writeBytes < 0)
         {

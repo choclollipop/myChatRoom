@@ -11,6 +11,7 @@
 #include <sqlite3.h>
 #include <signal.h>
 #include "chatRoomServer.h"
+#include <json-c/json.h>
 
 
 #define SERVER_PORT     8080
@@ -24,6 +25,7 @@
 #define BUFFER_SQL          100
 #define FLUSH_BUFFER        10
 #define DEFAULT_DATABASE    25
+#define BUFFER_SIZE         300
 
 /* 创建数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
@@ -171,7 +173,6 @@ void readName(int acceptfd, struct clientNode * client)
     bzero(flushBuffer, sizeof(flushBuffer));
     read(acceptfd, flushBuffer, sizeof(flushBuffer));
 }
-
 
 void readPasswd(int acceptfd, struct clientNode * client)
 {
@@ -367,9 +368,11 @@ int chatRoomServerRegister(int socketfd, clientNode *client, BalanceBinarySearch
 
     return ON_SUCCESS;
 }
+
 /* 查看好友列表 */
-int chatRoomServerSearchFriends()
+int chatRoomServerSearchFriends(int socketfd)
 {
+    int acceptfd = socketfd;
     /* 存储查询结果 */
     char ** result = NULL;
     int row = 0;
@@ -384,30 +387,107 @@ int chatRoomServerSearchFriends()
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
+    printf("查看好友功能\n");
+    sprintf(sql, "select * from friend");
     int ret = 0;
 
-    printf("全部好友:\n");
-    sprintf(sql, "select * from friend");
+    /* 好友列表json对象 */
+    struct json_object * friendList = json_object_new_array();
+    
     ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
     if (ret != SQLITE_OK)
     {
         printf("select error : %s\n", errMsg);
+        close(acceptfd);
         return ERROR;
+    }
+    writeBytes = write(acceptfd, &row, sizeof(int) * row);
+    if (writeBytes < 0)
+    {
+        perror("write error");
+        close(acceptfd);
+        sqlite3_close(g_clientMsgDB);
     }
     if (row == 0)
     {
-        printf("你当前没有好友！");
-    }
-    else
-    {            
-        for (int idx = 0; idx <= row; idx++)
+        writeBytes = write(acceptfd, "当前没有好友！\n", sizeof("当前没有好友！\n"));
+        if (writeBytes < 0)
         {
-            for (int jdx = 0; jdx < column; jdx++)
-            {
-                printf("id: %s\n", result[(idx * column) + jdx]);
-            }
+            perror("write error");
+            close(acceptfd);
+            sqlite3_close(g_clientMsgDB);
         }
     }
+    else
+    {
+        /* 传送好友 */    
+        for (int idx = 1; idx <= row; idx++)
+        {
+            json_object_object_add(friendList, "id", json_object_new_string(result[idx]));
+        }
+        const char *friendListVal = json_object_to_json_string(friendList);
+        writeBytes = write(acceptfd, friendListVal, strlen(friendListVal));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            close(acceptfd);
+            sqlite3_close(g_clientMsgDB);
+        }
+        printf("id: %s\n",friendListVal);
+    }
+
+}
+
+/* 添加好友 */
+int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList)
+{
+    int acceptfd = socketfd;
+    /* 存储查询结果 */
+    char ** result = NULL;
+    int row = 0;
+    int column = 0;
+    int choice = 0;
+
+    ssize_t readBytes = 0;
+    ssize_t writeBytes = 0;
+    char * errMsg = NULL;
+
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    /* 储存sql语句 */
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+    
+    //测试
+    printf("添加好友功能\n");
+
+    readBytes = read(acceptfd, nameBuffer, sizeof(nameBuffer));
+    if (readBytes < 0)
+    {
+        perror("read error");
+        close(acceptfd);
+        return ERROR;
+    }
+
+    clientNode * requestClient;
+    bzero(requestClient, sizeof(requestClient));
+    bzero(requestClient, sizeof(requestClient->loginName));
+    bzero(requestClient, sizeof(requestClient->loginPawd));
+
+    if (balanceBinarySearchTreeIsContainAppointVal(onlineList, requestClient))
+    {
+        AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, requestClient);
+        /* 给对方发送请求 todo.... */
+        /* 暂时只要在线就回复同意请求 */
+        int request = 1;
+        write(acceptfd, &request, sizeof(request));
+    }
+
+    /* 不在线 */
+    int request = 0;
+    write(acceptfd, &request, sizeof(request));
+    
 }
 
 /* 聊天室功能 */
@@ -421,17 +501,14 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     ssize_t readBytes = 0;
     ssize_t writeBytes = 0;
 
+    char * errMsg = NULL;
+
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
-    /* 数据库相关参数 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
-    char * errMsg = NULL;
 
     /* 打开数据库 */
     char ptr[DEFAULT_DATABASE];
@@ -465,6 +542,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     printf("功能界面\n");
     while (1)
     {
+        /* ⭐读取功能 */
         readBytes = read(acceptfd, &func_choice, sizeof(func_choice));
         if (readBytes < 0)
         {
@@ -477,81 +555,14 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-
-            printf("查看好友功能\n");
-
-            sprintf(sql, "select * from friend");
-            ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
-            if (ret != SQLITE_OK)
-            {
-                printf("select error : %s\n", errMsg);
-                close(acceptfd);
-                return ERROR;
-            }
-            if (row == 0)
-            {
-                writeBytes = write(acceptfd, "当前没有好友！\n", sizeof("当前没有好友！\n"));
-                if (writeBytes < 0)
-                {
-                    perror("write error");
-                    close(acceptfd);
-                    sqlite3_close(g_clientMsgDB);
-                }
-            }
-            else
-            {
-                /* 传送好友 */    
-                for (int idx = 1; idx <= row; idx++)
-                {
-                    for (int jdx = 0; jdx < column; jdx++)
-                    {
-                        writeBytes = write(acceptfd, result[(idx * column) + jdx], sizeof(client->loginName));
-                        if (writeBytes < 0)
-                        {
-                            perror("write error");
-                            close(acceptfd);
-                            sqlite3_close(g_clientMsgDB);
-                        }
-                        printf("id: %s\n", result[(idx * column) + jdx]);
-                    }
-                }
-            }
+            chatRoomServerSearchFriends(acceptfd);
             func_choice = 0;
-
             break;
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
-#if 0
-            //测试
-            printf("添加好友功能\n");
-
-            readBytes = read(acceptfd, nameBuffer, sizeof(nameBuffer));
-            if (readBytes < 0)
-            {
-                perror("read error");
-                close(acceptfd);
-                return ERROR;
-            }
-
-            clientNode * requestClient;
-            bzero(requestClient, sizeof(requestClient));
-            bzero(requestClient, sizeof(requestClient->loginName));
-            bzero(requestClient, sizeof(requestClient->loginPawd));
-
-            if (balanceBinarySearchTreeIsContainAppointVal(onlineList, requestClient))
-            {
-                AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, requestClient);
-                /* 给对方发送请求 todo.... */
-                /* 暂时只要在线就回复同意请求 */
-                int request = 1;
-                write(acceptfd, &request, sizeof(request));
-            }
-
-            /* 不在线 */
-            int request = 0;
-            write(acceptfd, &request, sizeof(request));
-#endif
+            chatRoomAddFriends(acceptfd, onlineList);
+            func_choice = 0;
             break;
 
         /* 删除好友 */

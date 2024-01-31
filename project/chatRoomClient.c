@@ -10,11 +10,9 @@
 #include <strings.h>
 #include <sqlite3.h>
 #include <string.h>
-<<<<<<< HEAD
 #include "chatRoomClient.h"
-=======
 #include "balanceBinarySearchTree.h"
->>>>>>> master
+
 
 #define SERVER_PORT 8080
 #define SERVER_ADDR "172.28.25.146"
@@ -52,22 +50,6 @@ enum STATUS_CODE
     NULL_FRIEND,
 };
 
-int compareFunc(void * val1, void * val2)
-{
-    clientNode * client = (clientNode *)val1;
-    clientNode * data = (clientNode *)val2;
-
-<<<<<<< HEAD
-    if (client->loginName > data->loginName)
-    {
-        return 1;
-    }
-    else if (client->loginName < data->loginName)
-    {
-        return -1;
-    }
-
-=======
 /* AVL比较器：以登录名做比较 */
 int compareFunc(void * val1, void * val2)
 {
@@ -83,7 +65,7 @@ int compareFunc(void * val1, void * val2)
         return -1;
     }
 
->>>>>>> master
+
     return 0;
 }
 
@@ -94,7 +76,6 @@ int printfFunc(void * val)
     printf("id : %s\n", client->loginName);
 }
 
-<<<<<<< HEAD
 /* 客户端的初始化 */
 int chatRoomClientInit(int socketfd)
 {
@@ -265,8 +246,6 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
 
 }
 
-#if 1
-=======
 
 /* 从服务器读取好友列表 */
 int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
@@ -312,7 +291,6 @@ int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
 }
 
 /* 聊天室功能 */
->>>>>>> master
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
     ssize_t writeBytes = 0;
@@ -334,7 +312,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         close(funcMenu);
         return ERROR;
     }
-<<<<<<< HEAD
+
 
     /* 创建好友列表文件 */
     // int friendList = open("./friendList.txt", O_RDWR | O_CREAT);
@@ -345,12 +323,8 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     //     return ERROR;
     // }
     // char friendListBuffer[]
-=======
-    
-    /* 创建好友树 */
     BalanceBinarySearchTree * friendTree;
     balanceBinarySearchTreeInit(&friendTree, compareFunc, printfFunc);
->>>>>>> master
 
     int choice = 0;
     char c = '0';
@@ -381,10 +355,6 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
             perror("write error");
             close(funcMenu);
-<<<<<<< HEAD
-            //close(friendList);
-=======
->>>>>>> master
             return ERROR;
         }
 
@@ -392,18 +362,10 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-<<<<<<< HEAD
-            printf("全部好友:\n");
-            sprintf(sql, "select * from friend");
-            ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
-            if (ret != SQLITE_OK)
-=======
-
             /* 读取好友 */
             int ret = readFriend(socketfd, friendTree);
             printf("ret : %d\n", ret);
             if(ret == NULL_FRIEND)
->>>>>>> master
             {
                 printf("你当前没有好友\n");
                 break;
@@ -412,10 +374,6 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             {
                 perror("readFriend error\n");
                 close(funcMenu);
-<<<<<<< HEAD
-                //close(friendList);
-=======
->>>>>>> master
                 return ERROR;
             }
 
@@ -558,68 +516,9 @@ int main()
 
         /* 登录 */
         case LOG_IN:
-<<<<<<< HEAD
+
             chatRoomClientLoginIn(socketfd, &client);
-=======
-            int flag = 0;
-            do
-            {
-                printf("请输入你的登录名(不超过20个字符):\n");
-                scanf("%s", client.loginName);
-                while ((c = getchar()) != EOF && c != '\n');
 
-                writeBytes = write(socketfd, client.loginName, sizeof(client.loginName));
-                if (writeBytes < 0)
-                {
-                    perror("write error");
-                    close(socketfd);
-                    close(mainMenu);
-                    exit(-1);
-                }
-
-                printf("请输入你的登陆密码：\n");
-                scanf("%s", client.loginPawd);
-                while ((c = getchar()) != EOF && c != '\n');
-
-                writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd));
-                if (writeBytes < 0)
-                {
-                    perror("write error");
-                    close(socketfd);
-                    close(mainMenu);
-                    exit(-1);
-                }
-
-                readBytes = read(socketfd, buffer, sizeof(buffer));
-                if (readBytes < 0)
-                {
-                    perror("read error");
-                    close(socketfd);
-                    close(mainMenu);
-                    exit(-1);
-                }
-
-                ret = strncmp("登录成功！\n", buffer, sizeof("登录成功！\n"));
-                if (ret == 0)
-                {
-                    /* 相等，登录成功 */
-                    printf("%s", buffer);
-
-                    chatRoomFunc(socketfd, &client);
-
-                    flag = 0;
-
-                    break;
-                }
-                else
-                {
-                    printf("%s", buffer);
-                    flag = 1;
-                }
-
-            } while (flag);
-
->>>>>>> master
             break;
         
         /* 注册 */

@@ -375,35 +375,14 @@ int main()
         
         /* 注册 */
         case REGISTER:
-            while (1)
+            flag = 0;
+            do
             {
                 printf("请输入你的登录名(不超过20个字符):\n");
                 scanf("%s", client.loginName);
                 while ((c = getchar()) != EOF && c != '\n');
-                
-                
-                sprintf(sql, "select id from user where (id = '%s')", client.loginName);
-                ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, NULL);
-                if (ret != SQLITE_OK)
-                {
-                    printf("有错误，第387行\n");
-                    // printf("select error:%s\n", errMsg);
-                    close(mainMenu);
-                    close(socketfd);
-                    exit(-1);
-                }
 
-                if (row > 0)
-                {
-                    printf("登录名已存在，请重新输入!\n");
-                    continue;
-                }
-
-                printf("请输入你的登陆密码：\n");
-                scanf("%s", client.loginPawd);
-                while ((c = getchar()) != EOF && c != '\n');
-
-                writeBytes = write(socketfd, client.loginName, sizeof(client.loginName) - 1);
+                writeBytes = write(socketfd, client.loginName, sizeof(client.loginName));
                 if (writeBytes < 0)
                 {
                     perror("write error");
@@ -411,30 +390,59 @@ int main()
                     close(socketfd);
                     exit(-1);
                 }
-                writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd) - 1);
-                if (writeBytes < 0)
-                {
-                    perror("write error");
-                    close(mainMenu);
-                    close(socketfd);
-                    exit(-1);
-                }
+
+                bzero(buffer, sizeof(buffer));
                 readBytes = read(socketfd, buffer, sizeof(buffer));
                 if (readBytes < 0)
                 {
-                    perror("write error");
+                    perror("read error");
                     close(mainMenu);
                     close(socketfd);
                     exit(-1);
                 }
-                printf("%s\n", buffer);
-                
-                if (readBytes > 0)
+
+                ret = strncmp("登录名已存在，请重新输入!\n", buffer, sizeof("登录名已存在，请重新输入!\n"));
+                if (ret == 0)
                 {
-                    // chatRoomFunc(socketfd, &client);
-                    break;
+                    printf("登录名已存在，请重新输入!\n");
+                    flag = 1;
+                    continue;
                 }
-            }
+                else
+                {
+                    printf("%s", buffer);
+                    scanf("%s", client.loginPawd);
+                    while ((c = getchar()) != EOF && c != '\n');
+
+                    writeBytes = write(socketfd, client.loginPawd, sizeof(client.loginPawd));
+                    if (writeBytes < 0)
+                    {
+                        perror("write error");
+                        close(mainMenu);
+                        close(socketfd);
+                        exit(-1);
+                    }
+
+                    readBytes = read(socketfd, buffer, sizeof(buffer));
+                    if (readBytes < 0)
+                    {
+                        perror("write error");
+                        close(mainMenu);
+                        close(socketfd);
+                        exit(-1);
+                    }
+                    printf("%s\n", buffer);
+                    
+                    if (readBytes > 0)
+                    {
+                        // chatRoomFunc(socketfd, &client);
+                        break;
+                    }
+
+                    flag = 1;
+                }   
+
+            } while(flag);
             
             break;
 

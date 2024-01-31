@@ -118,7 +118,7 @@ void sigHander(int sig)
 #endif
 
 /* 读取客户端传输的登录名和密码 */
-void readNamePasswd(int acceptfd, struct clientNode * client)
+void readName(int acceptfd, struct clientNode * client)
 {
     ssize_t readBytes = read(acceptfd, client->loginName, sizeof(client->loginName));
     if (readBytes < 0)
@@ -134,8 +134,11 @@ void readNamePasswd(int acceptfd, struct clientNode * client)
     char flushBuffer[FLUSH_BUFFER];
     bzero(flushBuffer, sizeof(flushBuffer));
     read(acceptfd, flushBuffer, sizeof(flushBuffer));
+}
 
-    readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
+void readPasswd(int acceptfd, struct clientNode * client)
+{
+    ssize_t readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
     if (readBytes < 0)
     {
         perror("read error");
@@ -315,9 +318,12 @@ void * chatHander(void * arg)
             int flag = 0;
             do {
 
-                readNamePasswd(acceptfd, &client);
+                readName(acceptfd, &client);
+                readPasswd(acceptfd, &client);
 
-                printf("name : %s\n", client.loginName);
+                result = NULL;
+                row = 0;
+                column = 0;
                 /* 判断用户输入是否正确 */
                 sprintf(sql, "select id = '%s' from user where password = '%s'", client.loginName, client.loginPawd);
                 ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
@@ -375,37 +381,89 @@ void * chatHander(void * arg)
 
             }while (flag);
             
-
             break;
         
         /* 注册功能 */
         case REGISTER:
-            readNamePasswd(acceptfd, &client);
-
-            sprintf(sql, "insert into user values('%s', '%s')", client.loginName, client.loginPawd);
-            ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, &errMsg);
-            if (ret != SQLITE_OK)
+            flag = 0;
+            do 
             {
-                printf("insert error: %s \n", errMsg);
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
+                readName(acceptfd, &client);
 
-            writeBytes = write(acceptfd, "注册成功！", sizeof("注册成功！"));
-            if (writeBytes == -1)
-            {
-                printf("write error:%s\n", errMsg);
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
+                row = 0;
+                column = 0;
+                result = NULL;
+                sprintf(sql, "select id from user where id = '%s'", client.loginName);
+                printf("登录名：%s", client.loginName);
+                ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+                if (ret != SQLITE_OK)
+                {
+                    printf("select error:%s\n", errMsg);
+                    close(acceptfd);
+                    exit(-1);
+                }
 
-            /* 插入在线列表 */
-            balanceBinarySearchTreeInsert(onlineList, &client);
+                if (row > 0)
+                {
+                    writeBytes = write(acceptfd, "登录名已存在，请重新输入!\n", sizeof("登录名已存在，请重新输入!\n"));
+                    if (writeBytes < 0)
+                    {
+                        perror("write error");
+                        close(acceptfd);
+                        exit(-1);
+                    }
+                    flag = 1;
+                    continue;
+                }
+                else
+                {
+                    writeBytes = write(acceptfd, "请输入登录密码：\n", sizeof("请输入登录密码：\n"));
+                    if (writeBytes < 0)
+                    {
+                        perror("write error");
+                        close(acceptfd);
+                        exit(-1);
+                    }
 
-            /* 打印在线列表 */
-            balanceBinarySearchTreeLevelOrderTravel(onlineList);
+                    readPasswd(acceptfd, &client);
 
-            choice = 0;
+                    /* 插入数据库中 */
+                    sprintf(sql, "insert into user values('%s', '%s')", client.loginName, client.loginPawd);
+                    ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, &errMsg);
+                    if (ret != SQLITE_OK)
+                    {
+                        printf("insert error: %s \n", errMsg);
+                        close(acceptfd);
+                        pthread_exit(NULL);
+                    }
+
+                    writeBytes = write(acceptfd, "注册成功！", sizeof("注册成功！"));
+                    if (writeBytes == -1)
+                    {
+                        printf("write error:%s\n", errMsg);
+                        close(acceptfd);
+                        pthread_exit(NULL);
+                    }
+
+                    /* 加锁 */
+                    pthread_mutex_lock(&g_mutex);
+
+                    /* 插入在线列表 */
+                    balanceBinarySearchTreeInsert(onlineList, &client);
+
+                    /* 解锁 */
+                    pthread_mutex_unlock(&g_mutex);
+
+                    /* 打印在线列表 */
+                    balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+                    choice = 0;
+
+                    flag = 0;
+                }
+            } while (flag);
+
+            
 
             break;
 

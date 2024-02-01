@@ -17,6 +17,7 @@
 #include <json-c/json.h>
 
 
+
 #define SERVER_PORT 8080
 #define SERVER_ADDR "172.28.25.146"
 #define BUFFER_SIZE 300
@@ -254,7 +255,6 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
 
 }
 
-
 /* 从服务器读取好友列表 */
 int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 {
@@ -373,50 +373,93 @@ int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearc
     read(socketfd, &flag, sizeof(int));
     if (flag == 1)
     {
-        printf("创建群聊成功！请输入你要邀请进群的好友：\n");
-        bzero(nameBuffer, sizeof(nameBuffer));
-        scanf("%s", nameBuffer);
-        while ((c = getchar()) != EOF && c != '\n');
-
-        int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)nameBuffer);
-        if (ret == 0)
-        {
-            printf("没有该好友，请重新输入！");
-            bzero(nameBuffer, sizeof(nameBuffer));
-            scanf("%s", nameBuffer);
-            while ((c = getchar()) != EOF && c != '\n');
-        }
-        else
-        {
-            write(socketfd, nameBuffer, sizeof(nameBuffer));
-        }   
-    }
+        printf("创建群聊成功！\n");
+        /* 拉人进群 */
+        chatRoomClientAddPeopleInGroup(socketfd, client, friendTree);
+    }    
 }
 
 /* 拉人进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
 {
-    /* 创建群聊 */
-    char nameBuffer[DEFAULT_LOGIN_NAME];
-    bzero(nameBuffer, sizeof(nameBuffer));
-
     char idBuffer[DEFAULT_LOGIN_NAME];
     bzero(idBuffer, sizeof(idBuffer));
 
     char c = '0';
-    int flag = 0;
-    printf("群聊名称：\n");
-    scanf("%s", nameBuffer);
-    while ((c = getchar()) != EOF && c != '\n');
 
     printf("好友id:   \n");
     scanf("%s", idBuffer);
     while ((c = getchar()) != EOF && c != '\n');
 
+    int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)idBuffer);
+    if (ret == 0)
+    {
+        printf("没有该好友，请重新输入！");
+        bzero(idBuffer, sizeof(idBuffer));
+        scanf("%s", idBuffer);
+        while ((c = getchar()) != EOF && c != '\n');
+    }
+    else
+    {
+        /* 将好友id发送到服务器 */
+        write(socketfd, idBuffer, sizeof(idBuffer));
 
-    /* 将选择的群聊名称和要邀请的好友 */
+        char chatReadBuffer[BUFFER_CHAT];
 
+        bzero(chatReadBuffer, sizeof(chatReadBuffer));
+        read(socketfd, chatReadBuffer, sizeof(chatReadBuffer));
 
+        if(strncmp(chatReadBuffer, "q", sizeof(chatReadBuffer)) == 0)
+        {
+            printf("添加成功！");
+        }
+    }
+}
+
+/* 发起群聊 */
+int chatRoomClientStartGroupCommunicate(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+{
+    int c = '0';
+    ssize_t readBytes = 0;
+
+    char writeBuffer[DEFAULT_LOGIN_NAME];
+    bzero(writeBuffer, sizeof(writeBuffer));
+
+    char readBuffer[DEFAULT_LOGIN_NAME];
+    bzero(readBuffer, sizeof(readBuffer));
+
+    struct json_object * groupHistory = json_object_new_object();
+
+    printf("发起群聊的名称:   \n");
+    scanf("%s", writeBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+
+    struct json_object * groupNameVal = json_object_new_string(writeBuffer);
+    json_object_object_add(groupHistory, "groupName", groupNameVal);
+    struct json_object * id = json_object_new_string(client->loginName);
+    json_object_object_add(groupHistory, "id", id);
+
+    bzero(writeBuffer, sizeof(writeBuffer));
+    printf("发送:   \n");
+    scanf("%s", writeBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+    struct json_object * historyVal = json_object_new_string(writeBuffer);
+    json_object_object_add(groupHistory, "history", historyVal);
+
+    const char * groupHistoryVal = json_object_to_json_string(groupHistory);
+    write(socketfd, groupHistoryVal, strlen(groupHistoryVal));
+
+    readBytes = read(socketfd, readBuffer, sizeof(readBuffer));
+    if (readBytes <= 0)
+    {
+        perror("read error");
+        exit(-1);
+    }
+    else
+    {
+        printf("read : %s\n", readBuffer);
+    }
+      
 
 }
 
@@ -585,7 +628,6 @@ int chatRoomFunc(int socketfd, const clientNode* client)
 
     return  ON_SUCCESS;
 }
-
 
 
 int main()

@@ -498,7 +498,24 @@ int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList)
     
 }
 
-/* 创建群聊并拉人 */
+/* 拉人进群 */
+int chatRoomServerAddPeopleInGroup(char *groupName, char *idBuffer)
+{
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+    char * errMsg = NULL;
+
+    sprintf(sql, "insert into groups values('%s' , '%s')", groupName, idBuffer);
+    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        exit(-1);
+    }
+
+}
+
+/* 创建群聊 */
 int chatRoomServerGroupChat(int socketfd)
 {
     int acceptfd = socketfd;
@@ -549,7 +566,14 @@ int chatRoomServerGroupChat(int socketfd)
     }
 
     /* 如果没有创建群聊--加入到表格 */
-    if (row == 0)
+    if (row < 0)
+    {
+        perro("get row error");
+        sqlite3_close(g_clientMsgDB);
+        exit(-1);
+        json_object_put(group);
+    }
+    else if (row == 0)
     {
         sprintf(sql, "insert into groups values('%s', '%s')", groupName, id);
         int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
@@ -558,34 +582,113 @@ int chatRoomServerGroupChat(int socketfd)
             printf("create table error:%s\n", errMsg);
             exit(-1);
         }
-    
-        flag = 1;
-        
-        write(acceptfd, &flag, sizeof(int));
+    }
+    flag = 1; //创建完成，添加群聊成员
 
-        read(acceptfd, idBuffer, sizeof(idBuffer));
-        sprintf(sql, "insert into groups values('%s', '%s')", groupName, idBuffer);
-        int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
-        if (ret != SQLITE_OK)
-        {
-            printf("create table error:%s\n", errMsg);
-            exit(-1);
-        } 
+    /* 发送邀请好友进群 */
+    write(acceptfd, &flag, sizeof(int));
+
+    bzero(idBuffer, sizeof(idBuffer));
+
+    read(acceptfd, idBuffer, sizeof(idBuffer));
+    chatRoomServerAddPeopleInGroup(groupNameVal , idBuffer);
+    
+    write(acceptfd, "q", sizeof("q"));
+
+    json_object_put(group);
+
+}
+
+/* 发起群聊 */
+int chatRoomStartCommunicate(int acceptfd, clientNode *client)
+{
+    ssize_t readBytes = 0;
+    ssize_t writeBytes = 0;
+
+    char readBuffer[BUFFER_SIZE];
+    bzero(readBuffer, sizeof(readBuffer));
+
+    int flag = 0;
+
+    readBytes = read(acceptfd, readBuffer, sizeof(readBuffer));
+    if (readBytes < 0)
+    {
+        perror("read error");
+        exit(-1);
+    }
+    else if (readBytes == 0)
+    {
+        printf("客户端已经下线");
+        exit(-1);
     }
     else
     {
-        
+        struct json_object * groupHistory = json_tokener_parse(readBuffer);
+        struct json_object * groupName = json_object_object_get(groupHistory, "groupName");
+        struct json_object * id = json_object_object_get(groupHistory, "id");
+        struct json_object * history = json_object_object_get(groupHistory, "historyVal");
+
+        const char * groupNameVal = json_object_to_json_string(groupName);
+        const char * idVal = json_object_to_json_string(id);
+        const char * historyVal = json_object_to_json_string(history);
+
+        /* 根据群名获得所有的id */
+        /* 储存sql语句 */
+        char sql[BUFFER_SQL];
+        bzero(sql, sizeof(sql));
+        /* 存储查询结果 */
+        char ** result = NULL;
+        int row = 0;
+        int column = 0;
+
+        char * errMsg = NULL;
+
+        sprintf(sql, "select id from groups where groupName = '%s'", groupNameVal);
+        int ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
+        if (ret != SQLITE_OK)
+        {
+            printf("create table error:%s\n", errMsg);
+            sqlite3_close(g_clientMsgDB);
+            exit(-1);
+        }
+
+        if (row < 0)
+        {
+            perror("get row error");
+            sqlite3_close(g_clientMsgDB);
+            exit(-1);
+        }
+        else if (row == 0)
+        {
+            write(acceptfd, &flag, sizeof(int));
+            sqlite3_close(g_clientMsgDB);
+            exit(-1);
+        }
+        else
+        {
+            while (1)
+            {
+                for (int idx  = 0; idx <= row; idx++)
+                {
+                    for (int jdx = 0; jdx < column; jdx++)
+                    {
+                        if (strcmp(client->loginName, result[idx * row + jdx] == 0))
+                        {
+                            acceptfd =  client->communicateFd;
+                        }
+                        /* to do.. 私聊接口 */
+                    }
+
+                }
+
+            }
+
+        }
+
     }
 
-}
-
-/* 拉人进群 */
-int chatRoomServerAddPeopleInGroup()
-{
-    
 
 }
-
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * client)
 {
@@ -690,7 +793,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
                 sqlite3_close(g_clientMsgDB);
                 return ERROR;
             }
-            bzero(ptrObj, sizeof(ptrObj));
+            bzero(ptrObj, sizeof(ptrObj));        
 
             /* 读取对象 */
             read(acceptfd, ptrObj, len + 1);
@@ -764,6 +867,11 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         case F_CREATE_GROUP:
             chatRoomServerGroupChat(acceptfd);
             func_choice = 0;
+            break;
+
+        /* 发起群聊 */
+        case F_GROUP_CHAT:
+            chatRoomStartCommunicate(acceptfd, requestClient);
             break;
 
         /* 退出 */

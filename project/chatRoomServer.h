@@ -44,4 +44,10 @@ int chatRoomServerSearchFriends(int socketfd);
 /* 添加好友 */
 int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList);
 
+/* 拉人进群 */
+int chatRoomServerAddPeopleInGroup(char *groupName, char *idBuffer);
+
+/* 创建群聊 */
+int chatRoomServerGroupChat(int socketfd);
+
 #endif

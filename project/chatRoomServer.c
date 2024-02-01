@@ -26,6 +26,7 @@
 #define FLUSH_BUFFER        10
 #define DEFAULT_DATABASE    25
 #define DEFAULT_CHAT        401
+#define BUFFER_CHAT         450
 #define DEFAULT_LEN         40
 
 /* 创建数据库句柄 */
@@ -56,6 +57,7 @@ enum FUNC_CHOICE
     F_FRIEND_DELETE,
     F_PRIVATE_CHAT,
     F_GROUP_CHAT,
+    F_EXIT,
 };
 
 typedef struct chatRoom
@@ -83,11 +85,13 @@ int compareFunc(void * val1, void * val2)
     clientNode * client = (clientNode *)val1;
     clientNode * data = (clientNode *)val2;
 
-    if (client->loginName > data->loginName)
+    int ret = strncmp(client->loginName, data->loginName, sizeof(client->loginName));
+
+    if (ret > 0)
     {
         return 1;
     }
-    else if (client->loginName < data->loginName)
+    else if (ret < 0)
     {
         return -1;
     }
@@ -161,7 +165,7 @@ void readPasswd(int acceptfd, struct clientNode * client)
 int chatRoomFunc(chatRoom * chat, clientNode * client)
 {
     /* 通信句柄 */
-    int acceptfd = chat->communicateFd;
+    int acceptfd = client->communicateFd;
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
 
@@ -307,25 +311,39 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
             break;
 
         case F_PRIVATE_CHAT:
+            int len = 0;
+            read(acceptfd, &len, sizeof(len));
 
-            char ptrObj[DEFAULT_LEN];
+            /* 打印在线列表 */
+            balanceBinarySearchTreeInOrderTravel(onlineList);
+
+            char * ptrObj = (char *)malloc(sizeof(char) * (len + 1));
+            if (ptrObj == NULL)
+            {
+                perror("malloc error");
+                close(acceptfd);
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             bzero(ptrObj, sizeof(ptrObj));
+
+            /* 读取对象 */
+            read(acceptfd, ptrObj, len + 1);
             /* 将字符串转换成json对象 */
             struct json_object * requestObj = json_tokener_parse(ptrObj);
             /* 取用户名 */
-            const char * requesrPtr = json_object_get_string(requestObj);
+            const char * requestPtr = json_object_get_string(json_object_object_get(requestObj, client->loginName));
+            printf("requestPtr: %s\n", requestPtr);
+            printf("requestPtr:%ld\n", strlen(requestPtr));
 
-            strncpy(client->loginName, requesrPtr, sizeof(requesrPtr) + 1);
+            strncpy(requestClient.loginName, requestPtr, sizeof(requestClient.loginName));
+            printf("requestClient.loginNama1:%s\n", requestClient.loginName);
 
             /* 关闭json对象 */
             json_object_put(requestObj);
 
-            int DidOnlien = 0;
-
             if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&requestClient))
             {
-                DidOnlien = 1;
-                write(acceptfd, &DidOnlien, sizeof(DidOnlien));
                 AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient);
                 if (onlineNode == NULL)
                 {
@@ -336,58 +354,50 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
                 }
 
                 requestClient = *(clientNode *)onlineNode->data;
+                printf("requestClient.loginName : %s\n", requestClient.loginName);
+                printf("requestClient.communicateFd : %d\n", requestClient.communicateFd);
+                printf("acceptfd : %d\n", acceptfd);
                 /* 请求通信对象的通信句柄 */
                 int requestfd = requestClient.communicateFd;
-                /* 给对方发送请求 todo.... */
-                /* 暂时只要在线就回复同意请求 */
-                int request = 0;
-                write(acceptfd, &request, sizeof(request));
-
+                
                 char chatBuffer[DEFAULT_CHAT];
-                bzero(chatBuffer, sizeof(chatBuffer));
+                char chatWriteBuffer[BUFFER_CHAT];
 
-                /* 同意会话 */
-                while (request)
+                write(acceptfd, "对方在线，可以输入要传送的消息", sizeof("对方在线，可以输入要传送的消息"));
+
+                while (1)
                 {
-                    readBytes = read(acceptfd, chatBuffer, sizeof(chatBuffer));
-                    if (readBytes < 0)
+                    bzero(chatBuffer,sizeof(chatBuffer));
+                    bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
+                    read(acceptfd, chatBuffer, sizeof(chatBuffer));
+                    if (!strncmp(chatBuffer, "q", sizeof(chatBuffer)))
                     {
-                        perror("read error");
-                        close(acceptfd);
-                        sqlite3_close(g_clientMsgDB);
-                        return ERROR;
-                    }
-                    
-                    /* 接收到退出标志 */
-                    if(!strncmp(chatBuffer, "q", sizeof("q")))
-                    {
-                        write(requestfd, "q", sizeof("q"));
+                        write(requestfd, "对方结束会话", sizeof("对方结束会话"));
                         break;
                     }
 
-                    writeBytes = write(requestfd, chatBuffer, sizeof(chatBuffer));
-                    if (readBytes < 0)
-                    {
-                        perror("read error");
-                        close(acceptfd);
-                        sqlite3_close(g_clientMsgDB);
-                        return ERROR;
-                    }
-
-                    read(requestfd, chatBuffer, sizeof(chatBuffer));
-                    if(!strncmp(chatBuffer, "q", sizeof("q")))
-                    {
-                        write(acceptfd, "q", sizeof("q"));
-                        break;
-                    }
+                    sprintf(chatWriteBuffer, "[%s]:%s", client->loginName, chatBuffer);
+                    write(requestfd, chatWriteBuffer, sizeof(chatWriteBuffer));
                 }
+                
+                
             }
             else
             {
-                /* 不在线 */
-                write(acceptfd, &DidOnlien, sizeof(DidOnlien));
+                write(acceptfd, "对方不在线，请给他留言(输出q退出)", sizeof("对方不在线，请给他留言(输出q退出)"));
+            }    
+
+            if (ptrObj)
+            {
+                free(ptrObj);
+                ptrObj = NULL;
             }
 
+            break;
+
+        case F_EXIT:
+
+            return ERROR;
             break;
 
         default:
@@ -425,8 +435,6 @@ void * chatHander(void * arg)
     bzero(&client, sizeof(clientNode));
     bzero(client.loginName, sizeof(DEFAULT_LOGIN_NAME));
     bzero(client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
-
-    client.communicateFd = acceptfd;
 
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
@@ -491,6 +499,8 @@ void * chatHander(void * arg)
                         close(acceptfd);
                         pthread_exit(NULL);
                     }
+
+                    client.communicateFd = acceptfd;
                     flag = 0;
                 }
                 else
@@ -506,10 +516,16 @@ void * chatHander(void * arg)
                     continue;
                 }
 
-                chatRoomFunc(chat, &client);
-
                 /* 打印在线列表 */
                 balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+                if (chatRoomFunc(chat, &client) < 0)
+                {
+                    close(acceptfd);
+                    /* 从在线列表中删除 */
+                    balanceBinarySearchTreeDelete(onlineList, &client);
+                    pthread_exit(NULL);
+                }
 
                 // if(chatRoomFunc(chat, &client) < 0)
                 // {
@@ -597,6 +613,16 @@ void * chatHander(void * arg)
                     /* 打印在线列表 */
                     balanceBinarySearchTreeLevelOrderTravel(onlineList);
 
+                    client.communicateFd = acceptfd;
+
+                    if (chatRoomFunc(chat, &client) < 0)
+                    {
+                        close(acceptfd);
+                        /* 从在线列表中删除 */
+                        balanceBinarySearchTreeDelete(onlineList, &client);
+                        pthread_exit(NULL);
+                    }
+
                     choice = 0;
 
                     flag = 0;
@@ -613,6 +639,7 @@ void * chatHander(void * arg)
         if (choice == EXIT)
         {
             close(acceptfd);
+            balanceBinarySearchTreeDelete(onlineList, &client);
             pthread_exit(NULL);
         }
 

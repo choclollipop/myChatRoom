@@ -12,6 +12,7 @@
 #include <string.h>
 #include "balanceBinarySearchTree.h"
 #include <json-c/json.h>
+#include <pthread.h>
 
 #define SERVER_PORT 8080
 #define SERVER_ADDR "172.30.149.120"
@@ -21,6 +22,7 @@
 
 #define DEFAULT_LOGIN_NAME  21
 #define DEFAULT_LOGIN_PAWD  17 
+#define DEFAULT_CHAT        450
 
 /* 建立数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
@@ -126,6 +128,25 @@ int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
     return ON_SUCCESS;
 }
 
+void * recv_message(void * arg)
+{
+    pthread_detach(pthread_self());
+    int socketfd = *(int *)arg;
+
+    char chatBuffer[DEFAULT_CHAT];
+    bzero(chatBuffer, sizeof(chatBuffer));
+
+    while (1)
+    {
+        bzero(chatBuffer, sizeof(chatBuffer));
+        read(socketfd, chatBuffer, sizeof(chatBuffer));
+
+        printf("%s\n", chatBuffer);
+    }
+
+    pthread_exit(NULL);
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
@@ -170,6 +191,10 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     int row = 0;
     int column = 0;
     char * errMsg = NULL;
+
+    /* 接收消息线程 */
+    pthread_t recvtid;
+    pthread_create(&recvtid, NULL, recv_message, (void *)&socketfd);
 
     while (1)
     {
@@ -278,6 +303,8 @@ int chatRoomFunc(int socketfd, const clientNode* client)
 
             /* 转成字符串 */
             const char * clientPtr = json_object_to_json_string(clientObj);
+            int len = strlen(clientPtr);
+            write(socketfd, &len, sizeof(len));
 
             writeBytes = write(socketfd, clientPtr, strlen(clientPtr) + 1);
             if (writeBytes < 0)
@@ -292,70 +319,22 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             /* 关闭json对象 */
             json_object_put(clientObj);
 
-            /* 确认对方是否在线 */
-            int onlineDid = 0;
-            readBytes = read(socketfd, &onlineDid, sizeof(onlineDid));
-            if (readBytes < 0)
-            {
-                close(socketfd);
-                close(funcMenu);
-                return ERROR;
-            }
+            usleep(500);
+            char chatWriteBuffer[BUFFER_CHAT];
 
-            char chatBuffer[BUFFER_CHAT];
-
-            if (onlineDid == 1)
+            while (1)
             {
-                int request = 0;
-                read(socketfd, &request, sizeof(request));
-                if (request == 1)
+                bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
+                scanf("%s", chatWriteBuffer);
+                while ((c = getchar()) != EOF && c != '\n');
+                if(!strncmp(chatWriteBuffer, "q", sizeof(chatWriteBuffer)))
                 {
-                    printf("可以开始会话,输入q可结束会话\n");
-                    while (1)
-                    {
-                        bzero(chatBuffer, sizeof(chatBuffer));
-                        scanf("%s", chatBuffer);
-                        while ((c = getchar()) != EOF && c != '\n');
-                        if(!strncmp(chatBuffer, "q", sizeof("q")))
-                        {
-                            write(socketfd, "q", sizeof("q"));
-                            break;
-                        }
-
-                        writeBytes = write(socketfd, chatBuffer, sizeof(chatBuffer));
-                        if (writeBytes < 0)
-                        {
-                            perror("write error");
-                            close(socketfd);
-                            close(funcMenu);
-                            return ERROR;
-                        }
-
-                        readBytes = read(socketfd, chatBuffer, sizeof(chatBuffer));
-                        if (readBytes < 0)
-                        {
-                            perror("read error");
-                            close(socketfd);
-                            close(funcMenu);
-                            return ERROR;
-                        }
-                        if(!strncmp(chatBuffer, "q", sizeof("q")))
-                        {
-                            printf("对方下线，此次会话已结束\n");
-                            break;
-                        }
-
-                    }
+                    write(socketfd, "q", sizeof("q"));
+                    break;
                 }
-                else
-                {
-                    printf("对方正忙，拒绝了您的会话请求\n");
-                }
-                
-            }
-            else
-            {
-                printf("对方暂时不在线，您可以先给对方留言\n");
+
+                write(socketfd, chatWriteBuffer, sizeof(chatWriteBuffer));
+
             }
 
             break;

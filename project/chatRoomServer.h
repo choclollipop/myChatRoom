@@ -6,13 +6,12 @@
 
 #define DEFAULT_LOGIN_NAME  20
 #define DEFAULT_LOGIN_PAWD  16
+#define BUFFER_SQL          100
 
 typedef struct chatRoom
 {
     BalanceBinarySearchTree * online;
     int communicateFd;
-    pthread_mutex_t mutex;
-    // sqlite3 * ppDb;
 } chatRoom;
 
 typedef struct clientNode
@@ -23,17 +22,16 @@ typedef struct clientNode
 } clientNode;
 
 
+
 /* 锁 */
 pthread_mutex_t g_mutex;
 
 
-/* 服务器的初始化 */
-int chatRoomServerInit(int socketfd);
-
-void * chatHander(void * arg);
+/* 服务器的初始化,设置端口复用 */
+int chatRoomServerInit(int * socketfd, int port);
 
 /* 服务器登录 */
-int chatRoomServerLoginIn(int socketfd, clientNode *client, BalanceBinarySearchTree * onlineList);
+int chatRoomServerLoginIn(clientNode *client, chatRoom * chat);
 
 /* 服务器注册 */
 int chatRoomServerRegister(int socketfd, clientNode *client, BalanceBinarySearchTree * onlineList);

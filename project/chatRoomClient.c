@@ -64,15 +64,16 @@ int compareFunc(void * val1, void * val2)
     clientNode * client = (clientNode *)val1;
     clientNode * data = (clientNode *)val2;
 
-    if (client->loginName > data->loginName)
+    int ret = strncmp(client->loginName, data->loginName, sizeof(client->loginName));
+
+    if (ret > 0)
     {
         return 1;
     }
-    else if (client->loginName < data->loginName)
+    else if (ret < 0)
     {
         return -1;
     }
-
 
     return 0;
 }
@@ -82,6 +83,26 @@ int printfFunc(void * val)
 {
     clientNode * client = (clientNode *)val;
     printf("id : %s\n", client->loginName);
+}
+
+/* 接收消息线程 */
+void * recv_message(void * arg)
+{
+    pthread_detach(pthread_self());
+    int socketfd = *(int *)arg;
+
+    char chatBuffer[DEFAULT_CHAT];
+    bzero(chatBuffer, sizeof(chatBuffer));
+
+    while (1)
+    {
+        bzero(chatBuffer, sizeof(chatBuffer));
+        read(socketfd, chatBuffer, sizeof(chatBuffer));
+
+        printf("%s\n", chatBuffer);
+    }
+
+    pthread_exit(NULL);
 }
 
 /* 客户端的初始化 */
@@ -420,25 +441,30 @@ int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBina
 
 }
 
-/* 接收消息线程 */
-void * recv_message(void * arg)
-{
-    pthread_detach(pthread_self());
-    int socketfd = *(int *)arg;
 
-    char chatBuffer[DEFAULT_CHAT];
-    bzero(chatBuffer, sizeof(chatBuffer));
+/* 发送消息 */
+int chatRoomSendMessage(int socketfd)
+{
+    char chatWriteBuffer[BUFFER_CHAT];
+    char c = '0';
 
     while (1)
     {
-        bzero(chatBuffer, sizeof(chatBuffer));
-        read(socketfd, chatBuffer, sizeof(chatBuffer));
+        bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
+        scanf("%s", chatWriteBuffer);
+        while ((c = getchar()) != EOF && c != '\n');
+        if(!strncmp(chatWriteBuffer, "q", sizeof(chatWriteBuffer)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            break;
+        }
 
-        printf("%s\n", chatBuffer);
+        write(socketfd, chatWriteBuffer, sizeof(chatWriteBuffer));
     }
 
-    pthread_exit(NULL);
+    return ON_SUCCESS;
 }
+
 
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, const clientNode* client)
@@ -501,7 +527,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            readFriend(socketfd, friendTree);
+            readFriends(socketfd, friendTree);
             break;
 
         /* 添加好友 */
@@ -558,22 +584,12 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             /* 关闭json对象 */
             json_object_put(clientObj);
 
-            usleep(500);
-            char chatWriteBuffer[BUFFER_CHAT];
-
-            while (1)
+            ret = chatRoomSendMessage(socketfd);
+            if (ret != 0)
             {
-                bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
-                scanf("%s", chatWriteBuffer);
-                while ((c = getchar()) != EOF && c != '\n');
-                if(!strncmp(chatWriteBuffer, "q", sizeof(chatWriteBuffer)))
-                {
-                    write(socketfd, "q", sizeof("q"));
-                    break;
-                }
-
-                write(socketfd, chatWriteBuffer, sizeof(chatWriteBuffer));
-
+                close(socketfd);
+                close(funcMenu);
+                return ERROR;
             }
 
             break;

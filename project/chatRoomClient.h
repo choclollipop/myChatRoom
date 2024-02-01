@@ -31,6 +31,9 @@ int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearc
 /* 拉人进群 */
 int chatRoomClientAddPeopleInGroup();
 
+/* 发送消息 */
+int chatRoomSendMessage(int socketfd);
+
 
 
 #endif

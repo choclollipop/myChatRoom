@@ -26,9 +26,10 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client);
 int chatRoomClientRegister(int socketfd, clientNode *client);
 
 /* 群聊 */
-int chatRoomClientGroupChat(int socketfd);
+int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
 
-
+/* 拉人进群 */
+int chatRoomClientAddPeopleInGroup();
 
 
 

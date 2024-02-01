@@ -383,11 +383,32 @@ int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearc
         else
         {
             write(socketfd, nameBuffer, sizeof(nameBuffer));
-        }
-
-        
+        }   
     }
+}
 
+/* 拉人进群 */
+int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+{
+    /* 创建群聊 */
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    char idBuffer[DEFAULT_LOGIN_NAME];
+    bzero(idBuffer, sizeof(idBuffer));
+
+    char c = '0';
+    int flag = 0;
+    printf("群聊名称：\n");
+    scanf("%s", nameBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+
+    printf("好友id:   \n");
+    scanf("%s", idBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+
+
+    /* 将选择的群聊名称和要邀请的好友 */
 
 
 

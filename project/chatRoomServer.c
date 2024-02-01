@@ -483,7 +483,7 @@ int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList)
         int request = 1;
         write(acceptfd, &request, sizeof(request));
     }
-
+    
     /* 不在线 */
     int request = 0;
     write(acceptfd, &request, sizeof(request));

@@ -249,7 +249,7 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
 
 
 /* 从服务器读取好友列表 */
-int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
+int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 {
     ssize_t readBytes = 0;
 
@@ -291,6 +291,53 @@ int readFriend(int socketfd, BalanceBinarySearchTree * friendTree)
     return ON_SUCCESS;
 }
 
+/* 添加好友 */
+int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree)
+{
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    // char writeBuffer[BUFFER_SIZE];
+    // bzero(writeBuffer, sizeof(writeBuffer));
+
+    int choice = 0;
+    char c = '0';
+
+    printf("请输入你要添加的好友id:\n");
+    scanf("%s", nameBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+
+    ssize_t writeBytes = 0;
+    ssize_t readBytes = 0;
+
+    /* 给添加的对象发送添加请求 */
+    writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
+    if (writeBytes < 0)
+    {
+        perror("write error");
+        return ERROR;
+    }
+
+    int Agree = 0;
+    readBytes = read(socketfd, &Agree, sizeof(Agree));
+    if (Agree == 1)
+    {
+        /* 同意 */
+        printf("对方已同意您的请求\n");
+        
+    }
+    else if (Agree == 2)
+    {
+        printf("对方拒绝了您的请求\n");
+    }
+    else
+    {
+        printf("对方暂时不在线\n");
+    }
+
+
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
@@ -315,16 +362,6 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         return ERROR;
     }
 
-
-    /* 创建好友列表文件 */
-    // int friendList = open("./friendList.txt", O_RDWR | O_CREAT);
-    // if (friendList == -1)
-    // {
-    //     perror("open funcMenu error");
-    //     close(funcMenu);
-    //     return ERROR;
-    // }
-    // char friendListBuffer[]
     BalanceBinarySearchTree * friendTree;
     balanceBinarySearchTreeInit(&friendTree, compareFunc, printfFunc);
 
@@ -365,23 +402,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            /* 读取好友 */
-            int ret = readFriend(socketfd, friendTree);
-            printf("ret : %d\n", ret);
-            if(ret == NULL_FRIEND)
-            {
-                printf("你当前没有好友\n");
-                break;
-            }
-            else if (ret < 0)
-            {
-                perror("readFriend error\n");
-                close(funcMenu);
-                return ERROR;
-            }
-
-            balanceBinarySearchTreeInOrderTravel(friendTree);
-
+            readFriend(socketfd, friendTree);
             break;
 
         /* 添加好友 */
@@ -389,43 +410,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             printf("请输入你要添加的好友id:\n");
             scanf("%s", nameBuffer);
             while ((c = getchar()) != EOF && c != '\n');
-
-            // sprintf(sql, "select id = '%s' from user", nameBuffer);
-            // ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
-            // if (ret != SQLITE_OK)
-            // {
-            //     printf("select error : %s\n", errMsg);
-            //     close(funcMenu);
-            //     return ERROR;
-            // }
-
-            // /* 给添加的对象发送添加请求 */
-            // writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
-            // if (writeBytes < 0)
-            // {
-            //     perror("write error");
-            //     close(funcMenu);
-            //     close(friendList);
-            //     return ERROR;
-            // }
-
-            // int Agree = 0;
-            // readBytes = read(socketfd, &Agree, sizeof(Agree));
-            // if (Agree == 1)
-            // {
-            //     /* 同意 */
-            //     printf("对方已同意您的请求\n");
-            //     /* 添加到好友列表 */
-            //     write(friendList, nameBuffer, sizeof(nameBuffer));
-            // }
-            // else if (Agree == 2)
-            // {
-            //     printf("对方拒绝了您的请求\n");
-            // }
-            // else
-            // {
-            //     printf("对方暂时不在线\n");
-            // }
+           
 
             break;
         

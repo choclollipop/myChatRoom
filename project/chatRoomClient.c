@@ -40,6 +40,7 @@ enum FUNC_CHOICE
     F_FRIEND_INCREASE,
     F_FRIEND_DELETE,
     F_PRIVATE_CHAT,
+    F_CREATE_GROUP,
     F_GROUP_CHAT,
 };
 
@@ -338,6 +339,60 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
 
 }
 
+/* 群聊 */
+int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+{
+    /* 创建群聊 */
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    char c = '0';
+    int flag = 0;
+
+    printf("请输入你想要创建的群聊名称：\n");
+    scanf("%s", nameBuffer);
+    while ((c = getchar()) != EOF && c != '\n');
+
+    /* 将群聊名称和登录用户名称传到服务器 */
+    struct json_object * group = json_object_new_object();
+    struct json_object * groupName = json_object_new_string(nameBuffer);
+    struct json_object * id = json_object_new_string(client->loginName);
+
+    json_object_object_add(group, "groupName", groupName);
+    json_object_object_add(group, "id", id);
+
+    const char * groupVal = json_object_to_json_string(group);
+    write(socketfd, groupVal, strlen(groupVal));
+
+    read(socketfd, &flag, sizeof(int));
+    if (flag == 1)
+    {
+        printf("创建群聊成功！请输入你要邀请进群的好友：\n");
+        bzero(nameBuffer, sizeof(nameBuffer));
+        scanf("%s", nameBuffer);
+        while ((c = getchar()) != EOF && c != '\n');
+
+        int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)nameBuffer);
+        if (ret == 0)
+        {
+            printf("没有该好友，请重新输入！");
+            bzero(nameBuffer, sizeof(nameBuffer));
+            scanf("%s", nameBuffer);
+            while ((c = getchar()) != EOF && c != '\n');
+        }
+        else
+        {
+            write(socketfd, nameBuffer, sizeof(nameBuffer));
+        }
+
+        
+    }
+
+
+
+
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
@@ -374,21 +429,13 @@ int chatRoomFunc(int socketfd, const clientNode* client)
     char writeBuffer[BUFFER_SIZE];
     bzero(writeBuffer, sizeof(writeBuffer));
 
-    char sql[BUFFER_SQL];
-    bzero(sql, sizeof(sql));
-
-    /* 查询数据库所需参数 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
-    char * errMsg = NULL;
-
     while (1)
     {
         printf("%s\n", funcMenuBuffer);
         printf("请输入你需要的功能：\n");
         scanf("%d", &choice);
         while ((c = getchar()) != EOF && c != '\n');
+
         /* ⭐发送选择的功能 */
         writeBytes = write(socketfd, &choice, sizeof(choice));
         if (writeBytes < 0)
@@ -407,10 +454,19 @@ int chatRoomFunc(int socketfd, const clientNode* client)
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
-            printf("请输入你要添加的好友id:\n");
-            scanf("%s", nameBuffer);
-            while ((c = getchar()) != EOF && c != '\n');
+            chatRoomClientAddFriends(socketfd, friendTree);
+            // printf("请输入你要添加的好友id:\n");
+            // scanf("%s", nameBuffer);
+            // while ((c = getchar()) != EOF && c != '\n');
            
+            break;
+         
+        case F_CREATE_GROUP:
+        chatRoomClientGroupChat(socketfd, client, friendTree);
+
+            break;
+        case F_GROUP_CHAT:
+
 
             break;
         

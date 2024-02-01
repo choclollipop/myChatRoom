@@ -54,6 +54,7 @@ enum FUNC_CHOICE
     F_FRIEND_INCREASE,
     F_FRIEND_DELETE,
     F_PRIVATE_CHAT,
+    F_CREATE_GROUP,
     F_GROUP_CHAT,
 };
 
@@ -490,6 +491,62 @@ int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList)
     
 }
 
+/* 创建群聊并拉人 */
+int chatRoomServerGroupChat(int socketfd)
+{
+    int acceptfd = socketfd;
+
+    char nameBuffer[DEFAULT_LOGIN_NAME];
+    bzero(nameBuffer, sizeof(nameBuffer));
+
+    char idBuffer[DEFAULT_LOGIN_NAME];
+    bzero(idBuffer, sizeof(idBuffer));
+
+    /* 读到群聊名称 */
+    read(acceptfd, nameBuffer, sizeof(nameBuffer));
+    struct json_object * group = json_tokener_parse(nameBuffer);
+    struct json_object * groupName = json_object_object_get(group, "groupName");
+    struct json_object * id = json_object_object_get(group, "id");
+
+    /* 储存sql语句 */
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+    char * errMsg = NULL;
+
+    sprintf(sql, "create table if not exists groups (groupName text not null, id text not null, history text)");
+    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        exit(-1);
+    }
+
+    sprintf(sql, "insert into groups values('%s', '%s')", groupName, id);
+    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        sqlite3_close(groups);
+        exit(-1);
+    }
+    else
+    {
+        flag = 1;
+    }
+    write(acceptfd, &flag, sizeof(int));
+
+    read(acceptfd, idBuffer, sizeof(idBuffer));
+    sprintf(sql, "insert into groups values('%s', '%s')", groupName, idBuffer);
+    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        sqlite3_close(groups);
+        exit(-1);
+    } 
+
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * client)
 {
@@ -569,6 +626,12 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         case F_FRIEND_DELETE:
             /* code */
             break;
+
+         /* 创建群聊 */
+        case F_REATE_GROUP,:
+            chatRoomServerGroupChat(socketfd);
+            func_choice = 0;
+            break;
         
         default:
             break;
@@ -641,7 +704,7 @@ void * chatHander(void * arg)
 
         /* 退出程序 */
         if (choice == EXIT)
-        {
+        { 
             close(acceptfd);
             pthread_exit(NULL);
         }

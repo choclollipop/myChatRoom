@@ -25,6 +25,8 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client);
 /* 客户端的注册 */
 int chatRoomClientRegister(int socketfd, clientNode *client);
 
+/* 群聊 */
+int chatRoomClientGroupChat(int socketfd);
 
 
 

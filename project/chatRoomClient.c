@@ -544,7 +544,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            readFriend(socketfd, friendTree);
+            readFriends(socketfd, friendTree);
             break;
 
         /* 添加好友 */
@@ -557,7 +557,7 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             break;
          
         case F_CREATE_GROUP:
-        chatRoomClientGroupChat(socketfd, client, friendTree);
+            chatRoomClientGroupChat(socketfd, &client, friendTree);
 
             break;
 

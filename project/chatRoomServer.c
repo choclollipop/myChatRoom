@@ -568,14 +568,14 @@ int chatRoomServerGroupChat(int socketfd)
     /* 如果没有创建群聊--加入到表格 */
     if (row < 0)
     {
-        perro("get row error");
+        perror("get row error");
         sqlite3_close(g_clientMsgDB);
         exit(-1);
         json_object_put(group);
     }
     else if (row == 0)
     {
-        sprintf(sql, "insert into groups values('%s', '%s')", groupName, id);
+        sprintf(sql, "insert into groups values('%s', '%s')", groupNameVal, idVal);
         int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
         if (ret != SQLITE_OK)
         {
@@ -672,8 +672,8 @@ int chatRoomStartCommunicate(int acceptfd, clientNode *requestClient)
                 {
                     for (int jdx = 0; jdx < column; jdx++)
                     {
-                        if (strcmp(requestClient->loginName, result[idx * row + jdx] == 0))
-                        {
+                        if (strcmp(requestClient->loginName, result[idx * row + jdx]) == 0)
+                        
                             acceptfd =  requestClient->communicateFd;
                         }
                         /* to do.. 私聊接口 */
@@ -688,7 +688,7 @@ int chatRoomStartCommunicate(int acceptfd, clientNode *requestClient)
     }
 
 
-}
+
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * client)
 {

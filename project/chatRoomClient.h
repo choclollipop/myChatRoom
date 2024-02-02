@@ -1,5 +1,6 @@
 #ifndef __CHAT_ROOM_CLIENT_H_
 #define __CHAT_ROOM_CLIENT_H_
+#include "common.h"
 
 
 #define DEFAULT_LOGIN_NAME  21

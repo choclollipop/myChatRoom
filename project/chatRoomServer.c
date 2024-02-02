@@ -600,7 +600,7 @@ int chatRoomServerGroupChat(int socketfd)
 }
 
 /* 发起群聊 */
-int chatRoomStartCommunicate(int acceptfd, clientNode *client)
+int chatRoomStartCommunicate(int acceptfd, clientNode *requestClient)
 {
     ssize_t readBytes = 0;
     ssize_t writeBytes = 0;
@@ -672,9 +672,9 @@ int chatRoomStartCommunicate(int acceptfd, clientNode *client)
                 {
                     for (int jdx = 0; jdx < column; jdx++)
                     {
-                        if (strcmp(client->loginName, result[idx * row + jdx] == 0))
+                        if (strcmp(requestClient->loginName, result[idx * row + jdx] == 0))
                         {
-                            acceptfd =  client->communicateFd;
+                            acceptfd =  requestClient->communicateFd;
                         }
                         /* to do.. 私聊接口 */
                     }
@@ -871,7 +871,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
 
         /* 发起群聊 */
         case F_GROUP_CHAT:
-            chatRoomStartCommunicate(acceptfd, requestClient);
+            chatRoomStartCommunicate(acceptfd, &requestClient);
             break;
 
         /* 退出 */

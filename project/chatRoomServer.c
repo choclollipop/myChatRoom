@@ -687,7 +687,108 @@ int chatRoomStartCommunicate(int acceptfd, clientNode *requestClient)
 
     }
 
+/* 寻找目标用户套接字并发送消息 */
+int chatRoomChatMessage(chatRoom * chat, clientNode * client, clientNode * requestClient)
+{
+    /* 通信句柄 */
+    int acceptfd = client->communicateFd;
+    /* 在线列表 */
+    BalanceBinarySearchTree * onlineList = chat->online;
+    AVLTreeNode * onlineNode = NULL;
 
+    if ((onlineList = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient)) != NULL)
+    {
+        requestClient = (clientNode *)onlineNode->data;
+
+        /* 请求通信对象的通信句柄 */
+        int requestfd = requestClient->communicateFd;
+        
+        char chatBuffer[DEFAULT_CHAT];
+        char chatWriteBuffer[BUFFER_CHAT];
+
+        write(acceptfd, "对方在线，可以输入要传送的消息", sizeof("对方在线，可以输入要传送的消息"));
+
+        while (1)
+        {
+            bzero(chatBuffer,sizeof(chatBuffer));
+            bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
+            read(acceptfd, chatBuffer, sizeof(chatBuffer));
+            if (!strncmp(chatBuffer, "q", sizeof(chatBuffer)))
+            {
+                write(requestfd, "对方结束会话", sizeof("对方结束会话"));
+                return ON_SUCCESS;
+            }
+
+            sprintf(chatWriteBuffer, "[%s]:%s", client->loginName, chatBuffer);
+            write(requestfd, chatWriteBuffer, sizeof(chatWriteBuffer));
+        }
+        
+        return ON_SUCCESS;
+    }
+    else
+    {
+        write(acceptfd, "对方不在线，请给他留言(输出q退出)", sizeof("对方不在线，请给他留言(输出q退出)"));
+    }
+
+    return ON_SUCCESS;
+}
+
+
+/* 删除好友 */
+int chatRoomDeleteFriens(chatRoom * chat, char *** result, int * row, int * column, char * errmsg)
+{
+    int acceptfd = chat->communicateFd;
+    BalanceBinarySearchTree * onlineList = chat->online;
+    clientNode delieteClient;
+    bzero(&delieteClient, sizeof(delieteClient));
+    bzero(delieteClient.loginPawd, sizeof(delieteClient.loginPawd));
+
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+    sprintf(sql, "select * from friend where id = '%s'", sizeof(delieteClient.loginName));
+    int flag = 0;
+    int ret = 0;
+    do
+    {
+        bzero(delieteClient.loginName, sizeof(delieteClient.loginName));
+        write(acceptfd, delieteClient.loginName, sizeof(delieteClient.loginName));
+        if (!strncmp(delieteClient.loginName, "q", sizeof(delieteClient.loginName)))
+        {
+            /* 退出 */
+            return ON_SUCCESS;
+        }
+
+        ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, &errmsg);
+        if (ret != SQLITE_OK)
+        {
+            printf("select friends error:", errmsg);
+            return ERROR;
+        }
+
+        if (row > 0)
+        {
+            bzero(sql, sizeof(sql));
+            sprintf(sql, "delete from friend where id = '%s'", delieteClient.loginName);
+
+            ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errmsg);
+            if (ret != SQLITE_OK)
+            {
+                printf("delete friends error:", errmsg);
+                return ERROR;
+            }
+
+            flag = 0;
+        }
+        else
+        {
+            write(acceptfd, "未找到该好友，请检查是否输入正确", sizeof("未找到该好友，请检查是否输入正确"));
+            flag = 1;
+        }
+
+    } while (flag);
+    
+    return ON_SUCCESS;
+}
 
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * client)
@@ -775,7 +876,15 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            /* code */
+            ret = chatRoomDeleteFriens(chat, &result, &row, &column, errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                close(g_clientMsgDB);
+                close(acceptfd);
+                return ERROR;
+            }
+
+            func_choice = 0;
             break;
 
         case F_PRIVATE_CHAT:

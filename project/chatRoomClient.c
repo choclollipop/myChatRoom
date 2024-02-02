@@ -483,6 +483,44 @@ void * recv_message(void * arg)
     pthread_exit(NULL);
 }
 
+
+/* 删除好友 */
+int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree)
+{
+    /* 列出好友列表 */
+    readFriends(socketfd, friendTree);
+
+    clientNode deleteClient;
+    bzero(&deleteClient, sizeof(deleteClient));
+    bzero(deleteClient.loginPawd, sizeof(deleteClient.loginPawd));
+    int flag = 0;
+
+    do
+    {
+        bzero(deleteClient.loginName, sizeof(deleteClient.loginName));
+        printf("请输入你要删除的好友id:(输入q退出)\n");
+        scanf("%s", deleteClient.loginName);
+        if (!strncmp(deleteClient.loginName, "q", sizeof(deleteClient.loginName)))
+        {
+            write(socketfd, "q", sizeof("q"));
+        }
+
+        int ret = balanceBinarySearchTreeDelete(friendTree, &deleteClient);
+        if (ret != 0)
+        {
+            flag = 1;
+        }
+        else
+        {
+            printf("删除好友成功\n");
+            flag = 0;
+        }
+
+    } while (flag);
+    
+    return ON_SUCCESS;
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, const clientNode* client)
 {
@@ -555,9 +593,10 @@ int chatRoomFunc(int socketfd, const clientNode* client)
             // while ((c = getchar()) != EOF && c != '\n');
            
             break;
-         
-        case F_CREATE_GROUP:
-            chatRoomClientGroupChat(socketfd, &client, friendTree);
+
+        /* 删除好友 */
+        case F_FRIEND_DELETE:
+            chatRoomDeleteFriends(socketfd, friendTree);
 
             break;
 
@@ -618,6 +657,12 @@ int chatRoomFunc(int socketfd, const clientNode* client)
                 write(socketfd, chatWriteBuffer, sizeof(chatWriteBuffer));
 
             }
+
+            break;
+
+        /* 群聊 */
+        case F_CREATE_GROUP:
+            chatRoomClientGroupChat(socketfd, client, friendTree);
 
             break;
         

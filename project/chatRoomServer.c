@@ -25,7 +25,6 @@
 #define FLUSH_BUFFER        10
 #define DEFAULT_DATABASE    25
 #define DEFAULT_CHAT        401
-#define BUFFER_CHAT         450
 #define DEFAULT_LEN         40
 #define BUFFER_SIZE         300
 
@@ -150,7 +149,7 @@ int chatRoomServerInit(int socketfd)
 /* 读取客户端传输的登录名和密码 */
 void readName(int acceptfd, struct clientNode * client)
 {
-    ssize_t readBytes = read(acceptfd, client->loginName, sizeof(client->loginName));
+    ssize_t readBytes = read(acceptfd, client->loginName, sizeof(char) * DEFAULT_LOGIN_NAME);
     if (readBytes < 0)
     {
         perror("read error");
@@ -160,25 +159,21 @@ void readName(int acceptfd, struct clientNode * client)
 
     printf("登录名：%s\n", client->loginName);
 
-    /* 清空缓冲区 */
-    char flushBuffer[FLUSH_BUFFER];
-    bzero(flushBuffer, sizeof(flushBuffer));
-    read(acceptfd, flushBuffer, sizeof(flushBuffer));
 }
 
 /* 读取密码*/
 void readPasswd(int acceptfd, struct clientNode * client)
 {
-    ssize_t readBytes = read(acceptfd, client->loginPawd, sizeof(client->loginPawd));
-    if (readBytes < 0)
-    {
-        perror("read error");
-        close(acceptfd);
-        sqlite3_close(g_chatRoomDB);
-        pthread_exit(NULL);
-    }
+    // ssize_t readBytes = read(acceptfd, client->loginPawd, sizeof(char) * DEFAULT_LOGIN_PAWD);
+    // if (readBytes < 0)
+    // {
+    //     perror("read error");
+    //     close(acceptfd);
+    //     sqlite3_close(g_chatRoomDB);
+    //     pthread_exit(NULL);
+    // }
 
-    printf("登录密码：%s\n", client->loginPawd);
+    // printf("登录密码：%s\n", client->loginPawd);
 }
 
 #if 0
@@ -195,204 +190,165 @@ void sigHander(int sig)
 #endif
 
 /* 服务器登录 */
-int chatRoomServerLoginIn(chatRoom * chat, clientNode *client)
+int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg)
 {
-    int acceptfd = client->communicateFd;
+    int acceptfd = chat->communicateFd;
     BalanceBinarySearchTree * onlineList = chat->online;
-    /* 存储查询结果 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
-    int choice = 0;
 
-    ssize_t readBytes = 0;
     ssize_t writeBytes = 0;
-    char * errMsg = NULL;
 
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
     int ret = 0;
-    int flag = 0;
-    do {
-        readName(acceptfd, client);
-        if (!strncmp(client->loginName, "q", sizeof(client->loginName)))
-        {
-            return ON_SUCCESS;
-        }
 
-        readPasswd(acceptfd, client);
-        if (!strncmp(client->loginName, "q", sizeof(client->loginName)))
-        {
-            return ON_SUCCESS;
-        }
+    /* 判断用户输入是否正确 */
+    sprintf(sql, "select * from user where password = '%s' and id = '%s'", Msg->clientLogInPasswd, Msg->clientLogInName);
+    ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("select error : %s\n", errMsg);
+        return ERROR;
+    }
 
-        result = NULL;
-        row = 0;
-        column = 0;
+    /* id和密码输入正确 */
+    if (row > 0)
+    {
+        clientNode client;
+        bzero(&client, sizeof(client));
+        bzero(client.loginName, sizeof(client.loginName));
+        strncpy(client.loginName, Msg->clientLogInName, sizeof(Msg->clientLogInName));
+        client.communicateFd = acceptfd;
 
-        /* 判断用户输入是否正确 */
-        sprintf(sql, "select * from user where password = '%s' and id = '%s'", client->loginPawd, client->loginName);
-        ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
-        if (ret != SQLITE_OK)
+        /* 加锁 */
+        pthread_mutex_lock(&g_mutex);
+
+        /* 插入在线列表 */
+        balanceBinarySearchTreeInsert(onlineList, (void *)&client);
+
+        /* 解锁 */
+        pthread_mutex_unlock(&g_mutex);
+
+        /* 打印在线列表  测试.......................................................... */
+        balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "登录成功！", sizeof(Msg->message));
+        writeBytes = write(acceptfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
         {
-            printf("select error : %s\n", errMsg);
+            perror("write error");
             return ERROR;
         }
 
-        /* id和密码输入正确 */
-        if (row > 0)
+        ret = chatRoomFunc(chat, Msg);
+        if (ret < 0)
         {
-            /* 加锁 */
-            pthread_mutex_lock(&g_mutex);
-
-            /* 插入在线列表 */
-            balanceBinarySearchTreeInsert(onlineList, (void *)client);
-
-            /* 解锁 */
-            pthread_mutex_unlock(&g_mutex);
-
-            /* 打印在线列表 */
-            balanceBinarySearchTreeLevelOrderTravel(onlineList);
-
-            writeBytes = write(acceptfd, "登录成功！\n", sizeof("登录成功！\n"));
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                return ERROR;
-            }
-
-            ret = chatRoomFunc(chat, client);
-            if (ret < 0)
-            {
-                printf("chatRoomFunc error\n");
-                return ERROR;
-            }
-
-            flag = 0;
-        }
-        else
-        {
-            writeBytes = write(acceptfd, "用户名或密码输入错误，请重新输入\n", sizeof("用户名或密码输入错误，请重新输入\n"));
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                return ERROR;
-            }
-            flag = 1;
-            continue;
+            printf("chatRoomFunc error\n");
+            return ERROR;
         }
 
-    }while (flag);
+    }
+    else
+    {
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "用户名或密码输入错误，请重新输入", sizeof(Msg->message));
+        writeBytes = write(acceptfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
+    }
 
     return ON_SUCCESS;
 }
 
 /* 服务器注册 */
-int chatRoomServerRegister(chatRoom * chat, clientNode *client)
+int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg)
 {
     int acceptfd = chat->communicateFd;
     BalanceBinarySearchTree * onlineList = chat->online;
-    /* 存储查询结果 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
-    int choice = 0;
 
-    ssize_t readBytes = 0;
     ssize_t writeBytes = 0;
-    char * errMsg = NULL;
 
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
     int ret = 0;
-    int flag = 0;
-    do 
-    {
-        readName(acceptfd, client);
 
-        row = 0;
-        column = 0;
-        result = NULL;
-        sprintf(sql, "select id from user where id = '%s'", client->loginName);
-        printf("登录名：%s", client->loginName);
-        ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+    sprintf(sql, "select id from user where id = '%s'", Msg->clientLogInName);
+    ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("select error:%s\n", errMsg);
+        close(acceptfd);
+        exit(-1);
+    }
+
+    if (row > 0)
+    {
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "登录名已存在，请重新输入!", sizeof(Msg->message));
+        writeBytes = write(acceptfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
+
+    }
+    else
+    {
+        /* 新用户，插入数据库中 */
+        sprintf(sql, "insert into user values('%s', '%s')", Msg->clientLogInName, Msg->clientLogInPasswd);
+        ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, errMsg);
         if (ret != SQLITE_OK)
         {
-            printf("select error:%s\n", errMsg);
+            printf("insert error: %s \n", errMsg);
             close(acceptfd);
-            exit(-1);
+            pthread_exit(NULL);
         }
 
-        if (row > 0)
+        clientNode client;
+        bzero(&client, sizeof(client));
+        bzero(client.loginName, sizeof(client.loginName));
+
+        strncpy(client.loginName, Msg->clientLogInName, sizeof(Msg->clientLogInName));
+        client.communicateFd = acceptfd;
+
+        /* 加锁 */
+        pthread_mutex_lock(&g_mutex);
+
+        /* 插入在线列表 */
+        balanceBinarySearchTreeInsert(onlineList, (void *)&client);
+
+        /* 解锁 */
+        pthread_mutex_unlock(&g_mutex);
+
+        /* 打印在线列表 */
+        balanceBinarySearchTreeLevelOrderTravel(onlineList);
+
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "注册成功！", sizeof(Msg->message));
+        writeBytes = write(acceptfd, &Msg, sizeof(struct message));
+        if (writeBytes == -1)
         {
-            writeBytes = write(acceptfd, "登录名已存在，请重新输入!\n", sizeof("登录名已存在，请重新输入!\n"));
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                close(acceptfd);
-                exit(-1);
-            }
-            flag = 1;
-            continue;
+            printf("write error:%s\n", errMsg);
+            close(acceptfd);
+            pthread_exit(NULL);
         }
-        else
+
+        ret = chatRoomFunc(chat, &client);
+        if (ret < 0)
         {
-            writeBytes = write(acceptfd, "请输入登录密码：\n", sizeof("请输入登录密码：\n"));
-            if (writeBytes < 0)
-            {
-                perror("write error");
-                close(acceptfd);
-                exit(-1);
-            }
-
-            readPasswd(acceptfd, client);
-
-            /* 插入数据库中 */
-            sprintf(sql, "insert into user values('%s', '%s')", client->loginName, client->loginPawd);
-            ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, &errMsg);
-            if (ret != SQLITE_OK)
-            {
-                printf("insert error: %s \n", errMsg);
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
-
-            writeBytes = write(acceptfd, "注册成功！", sizeof("注册成功！"));
-            if (writeBytes == -1)
-            {
-                printf("write error:%s\n", errMsg);
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
-
-            /* 加锁 */
-            pthread_mutex_lock(&g_mutex);
-
-            /* 插入在线列表 */
-            balanceBinarySearchTreeInsert(onlineList, (void *)client);
-
-            /* 解锁 */
-            pthread_mutex_unlock(&g_mutex);
-
-            /* 打印在线列表 */
-            balanceBinarySearchTreeLevelOrderTravel(onlineList);
-
-            ret = chatRoomFunc(chat, client);
-            if (ret < 0)
-            {
-                printf("chatRoomFunc error\n");
-                return ERROR;
-            }
-
-            choice = 0;
-
-            flag = 0;
+            printf("chatRoomFunc error\n");
+            return ERROR;
         }
-    } while (flag);
+
+    }
 
     return ON_SUCCESS;
 }
@@ -480,7 +436,7 @@ int chatRoomAddFriends(chatRoom * chat)
     clientNode requestClient;
     bzero(&requestClient, sizeof(requestClient));
     bzero(requestClient.loginName, sizeof(requestClient.loginName));
-    bzero(requestClient.loginPawd, sizeof(requestClient.loginPawd));
+    // bzero(requestClient.loginPawd, sizeof(requestClient.loginPawd));
     
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
@@ -799,7 +755,7 @@ int chatRoomDeleteFriens(chatRoom * chat, char *** result, int * row, int * colu
     BalanceBinarySearchTree * onlineList = chat->online;
     clientNode delieteClient;
     bzero(&delieteClient, sizeof(delieteClient));
-    bzero(delieteClient.loginPawd, sizeof(delieteClient.loginPawd));
+    // bzero(delieteClient.loginPawd, sizeof(delieteClient.loginPawd));
 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
@@ -846,6 +802,76 @@ int chatRoomDeleteFriens(chatRoom * chat, char *** result, int * row, int * colu
     } while (flag);
     
     return ON_SUCCESS;
+}
+
+/* 主功能 */
+void * chatHander(void * arg)
+{
+    chatRoom * chat = (chatRoom *)arg;
+    /* 通信句柄 */
+    int acceptfd = chat->communicateFd;
+    /* 在线列表 */
+    BalanceBinarySearchTree * onlineList = chat->online;
+
+    char ** result = NULL;
+    int row = 0;
+    int column = 0;
+    char * errMsg = NULL;
+
+    ssize_t readBytes = 0;
+    int ret = 0;
+
+    message Msg;
+    bzero(&Msg, sizeof(Msg));
+    bzero(Msg.clientLogInName, sizeof(Msg.clientLogInName));
+    bzero(Msg.clientLogInPasswd, sizeof(Msg.clientLogInPasswd));
+
+    while (1)
+    {
+        readBytes = read(acceptfd, &Msg, sizeof(struct message));
+        if (readBytes < 0)
+        {
+            perror("read error");
+            close(acceptfd);
+            pthread_exit(NULL);
+        }
+
+        switch (Msg.choice)
+        {
+        case LOG_IN:
+            ret = chatRoomServerLoginIn(chat, &Msg, &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                perror("LOGIN ERROR");
+                close(acceptfd);
+                pthread_exit(NULL);
+            }
+            break;
+
+        /* 注册功能 */
+        case REGISTER:
+            ret = chatRoomServerRegister(chat, &Msg, &result, row, column, errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                perror("LOGIN ERROR");
+                close(acceptfd);
+                pthread_exit(NULL);
+            }
+            break;
+        
+        default:
+            break;
+        }
+
+        /* 退出程序 */
+        if (Msg.choice == EXIT)
+        { 
+            close(acceptfd);
+            pthread_exit(NULL);
+        }
+    }
+
+    pthread_exit(NULL);
 }
 
 /* 聊天室功能 */
@@ -899,7 +925,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     clientNode requestClient;
     bzero(&requestClient, sizeof(requestClient));
     bzero(&requestClient, sizeof(requestClient.loginName));
-    bzero(&requestClient, sizeof(requestClient.loginPawd));
+    // bzero(&requestClient, sizeof(requestClient.loginPawd));
 
     int func_choice = 0;
 
@@ -1061,87 +1087,6 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     }
 }
 
-/* 主功能 */
-void * chatHander(void * arg)
-{
-    /* 线程分离 */
-    pthread_detach(pthread_self());
-    /* 接收传递过来的结构体 */
-    chatRoom * chat = (chatRoom *)arg;
-
-    /* 通信句柄 */
-    int acceptfd = chat->communicateFd;
-    
-    /* 在线列表 */
-    BalanceBinarySearchTree * onlineList = chat->online;
-    /* 数据库句柄 */
-    // sqlite3 * g_chatRoomDB = chat->ppDb;
-
-    int choice = 0;
-    int ret = 0;
-
-    /* 新建用户结点 */
-    clientNode client;
-    bzero(&client, sizeof(clientNode));
-    bzero(client.loginName, sizeof(DEFAULT_LOGIN_NAME));
-    bzero(client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
-    client.communicateFd = acceptfd;
-
-    /* 程序运行 */
-    while (1)
-    {
-        /* 循环接收选择的功能 */
-        ssize_t readChoice = read(acceptfd, &choice, sizeof(choice));
-        if (readChoice < 0)
-        {
-            perror("read error");
-            close(acceptfd);
-            pthread_exit(NULL);
-        }
-
-        switch (choice)
-        {
-        /* 登录功能 */
-        case LOG_IN:
-            ret = chatRoomServerLoginIn(chat, &client);
-            if (ret != ON_SUCCESS)
-            {
-                perror("LOGIN ERROR");
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
-            choice = 0;
-            break;
-        
-        /* 注册功能 */
-        case REGISTER:
-
-            ret = chatRoomServerRegister(chat, &client);
-            if (ret != ON_SUCCESS)
-            {
-                perror("LOGIN ERROR");
-                close(acceptfd);
-                pthread_exit(NULL);
-            }
-
-            choice = 0;
-            break;
-
-        default:
-            break;
-        }
-
-        /* 退出程序 */
-        if (choice == EXIT)
-        { 
-            close(acceptfd);
-            pthread_exit(NULL);
-        }
-
-    }
-
-    pthread_exit(NULL);
-}
  
 int main()
 {

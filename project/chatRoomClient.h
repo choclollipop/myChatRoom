@@ -5,7 +5,8 @@
 
 
 #define DEFAULT_LOGIN_NAME  21
-#define DEFAULT_LOGIN_PAWD  17 
+#define DEFAULT_LOGIN_PAWD  17
+#define BUFFER_CHAT         401
 
 
 typedef struct clientNode
@@ -14,6 +15,19 @@ typedef struct clientNode
     char loginPawd[DEFAULT_LOGIN_PAWD];
 } clientNode;
 
+typedef struct message
+{
+    /* 主界面选择 */
+    int choice;
+    /* 功能界面选择 */
+    int func_choice;
+    /* 客户内容 */
+    clientLogInName[DEFAULT_LOGIN_NAME];
+    clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 消息内容 */
+    char message[BUFFER_CHAT];
+} message;
+
 
 /* 客户端的功能主要实现 */
 //int chatRoomFunc(int socketfd, const clientNode* client);
@@ -21,11 +35,8 @@ typedef struct clientNode
 /* 客户端的初始化 */
 int chatRoomClientInit(int socketfd);
 
-/* 客户端的登录 */
-int chatRoomClientLoginIn(int socketfd, clientNode *client);
-
-/* 客户端的注册 */
-int chatRoomClientRegister(int socketfd, clientNode *client);
+/* 客户端的登录注册 */
+int chatRoomClientLoginInRegister(int socketfd, message * Msg);
 
 /* 删除好友 */
 int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree);

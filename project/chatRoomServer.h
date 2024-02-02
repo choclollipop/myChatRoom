@@ -4,8 +4,9 @@
 #include <pthread.h>
 
 
-#define DEFAULT_LOGIN_NAME  20
-#define DEFAULT_LOGIN_PAWD  16
+#define DEFAULT_LOGIN_NAME  21
+#define DEFAULT_LOGIN_PAWD  17
+#define BUFFER_CHAT         401
 
 typedef struct chatRoom
 {
@@ -18,9 +19,21 @@ typedef struct chatRoom
 typedef struct clientNode
 {
     char loginName[DEFAULT_LOGIN_NAME];
-    char loginPawd[DEFAULT_LOGIN_PAWD];
     int communicateFd;
 } clientNode;
+
+typedef struct message
+{
+    /* 主界面选择 */
+    int choice;
+    /* 功能界面选择 */
+    int func_choice;
+    /* 客户内容 */
+    clientLogInName[DEFAULT_LOGIN_NAME];
+    clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 消息内容 */
+    char message[BUFFER_CHAT];
+} message;
 
 
 /* 锁 */
@@ -33,10 +46,10 @@ int chatRoomServerInit(int socketfd);
 void * chatHander(void * arg);
 
 /* 服务器登录 */
-int chatRoomServerLoginIn(chatRoom * chat, clientNode *client);
+int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg);
 
 /* 服务器注册 */
-int chatRoomServerRegister(chatRoom * chat, clientNode *client);
+int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg);
 
 /* 查看好友列表 */
 int chatRoomServerSearchFriends(chatRoom * chat);

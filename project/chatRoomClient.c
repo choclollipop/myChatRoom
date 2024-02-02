@@ -325,45 +325,51 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
-    // char writeBuffer[BUFFER_SIZE];
-    // bzero(writeBuffer, sizeof(writeBuffer));
+    char readBuffer[BUFFER_SIZE];
+    bzero(readBuffer, sizeof(readBuffer));
 
     int choice = 0;
     char c = '0';
-
-    printf("请输入你要添加的好友id:\n");
-    scanf("%s", nameBuffer);
-    while ((c = getchar()) != EOF && c != '\n');
+    int flag = 0;
 
     ssize_t writeBytes = 0;
     ssize_t readBytes = 0;
 
-    /* 给添加的对象发送添加请求 */
-    writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
-    if (writeBytes < 0)
+    do
     {
-        perror("write error");
-        return ERROR;
-    }
+        printf("请输入你要添加的好友id(输入q退出):\n");
+        scanf("%s", nameBuffer);
+        while ((c = getchar()) != EOF && c != '\n');
+        if (!strncmp(nameBuffer, "q", sizeof(nameBuffer)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
 
-    int Agree = 0;
-    readBytes = read(socketfd, &Agree, sizeof(Agree));
-    if (Agree == 1)
-    {
-        /* 同意 */
-        printf("对方已同意您的请求\n");
-        
-    }
-    else if (Agree == 2)
-    {
-        printf("对方拒绝了您的请求\n");
-    }
-    else
-    {
-        printf("对方暂时不在线\n");
-    }
+        /* 给添加的对象发送添加请求 */
+        writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
 
+        /* 判断是否同意 */
+        readBytes = read(socketfd, readBuffer, sizeof(readBuffer));
+        if (!strncmp(readBuffer, "对方同意了您的请求", sizeof(readBuffer)))
+        {
+            flag = 1;
+        }
+        else
+        {
+            /* 插入好友列表中 */
+            balanceBinarySearchTreeInsert(friendTree, (void *)nameBuffer);
+            flag = 0;
+        }
 
+    } while (flag);
+
+    return ON_SUCCESS;
 }
 
 /* 群聊 */

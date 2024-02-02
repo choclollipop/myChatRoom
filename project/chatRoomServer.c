@@ -477,22 +477,28 @@ int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList)
             close(acceptfd);
             return ERROR;
         }
+        if(!strncmp(requestClient->loginName, "q", sizeof(requestClient->loginName)))
+        {
+            return ON_SUCCESS;
+        }
 
         sprintf(sql, "select id from user where id = '%s'", requestClient->loginName);
         sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
 
-        if ()
-
-        if (balanceBinarySearchTreeIsContainAppointVal(onlineList, requestClient))
+        if (row > 0)
         {
-            AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, requestClient);
-            int request = 1;
-            write(acceptfd, &request, sizeof(request));
+            write(acceptfd, "对方同意了您的请求", sizeof("对方同意了您的请求"));
+
+            sprintf(sql, "inster into friend values(id = '%s')", requestClient->loginName);
+            sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+            flag = 0;
         }
-        
-        /* 不在线 */
-        int request = 0;
-        write(acceptfd, &request, sizeof(request));
+        else
+        {
+            write(acceptfd, "对方不存在，请确认输入的id是否正确", sizeof("对方不存在，请确认输入的id是否正确"));
+            flag = 1;
+        }
+
     } while (flag);
     
     return ON_SUCCESS;

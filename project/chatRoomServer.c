@@ -186,13 +186,7 @@ void readPasswd(int acceptfd, struct clientNode * client)
 void sigHander(int sig)
 {
 
-    // close();
-    // close(socketfd);
-    
-    // pthread_mutex_destroy(&g_mutex);
-    // balanceBinarySearchTreeDestroy(chat.online);
-    // sqlite3_close(chat.ppDb);
-    // threadPoolDestroy(&pool);
+    printf("hello world\n");
 
     /* 进程结束 */
     exit(1);
@@ -223,7 +217,16 @@ int chatRoomServerLoginIn(chatRoom * chat, clientNode *client)
     int flag = 0;
     do {
         readName(acceptfd, client);
+        if (!strncmp(client->loginName, "q", sizeof(client->loginName)))
+        {
+            return ON_SUCCESS;
+        }
+
         readPasswd(acceptfd, client);
+        if (!strncmp(client->loginName, "q", sizeof(client->loginName)))
+        {
+            return ON_SUCCESS;
+        }
 
         result = NULL;
         row = 0;
@@ -1253,7 +1256,7 @@ int main()
     /* ctr + c */
     signal(SIGINT, sigHander);
     /* ctr + z */
-    signal(SIGTSTP, sigHander);
+    // signal(SIGTSTP, sigHander);
 
 #endif
 

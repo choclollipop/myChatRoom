@@ -135,6 +135,11 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client)
         printf("请输入你的登录名(不超过20个字符):\n");
         scanf("%s", client->loginName);
         while ((c = getchar()) != EOF && c != '\n');
+        if (!strncmp(client->loginName, "q", sizeof(client->loginName)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
 
         writeBytes = write(socketfd, client->loginName, sizeof(client->loginName));
         if (writeBytes < 0)
@@ -144,9 +149,14 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client)
             exit(-1);
         }
 
-        printf("请输入你的登陆密码：\n");
+        printf("请输入你的登陆密码(输入q退出)：\n");
         scanf("%s", client->loginPawd);
         while ((c = getchar()) != EOF && c != '\n');
+        if (!strncmp(client->loginPawd, "q", sizeof(client->loginPawd)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
 
         writeBytes = write(socketfd, client->loginPawd, sizeof(client->loginPawd));
         if (writeBytes < 0)
@@ -203,11 +213,11 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
     int flag = 0;
     do
     {
-        printf("请输入你的登录名(不超过20个字符):\n");
+        printf("请输入你的登录名(不超过20个字符,输入q退出):\n");
         scanf("%s", client->loginName);
         while ((c = getchar()) != EOF && c != '\n');
 
-        writeBytes = write(socketfd, client->loginName, sizeof(client->loginName));
+        writeBytes = write(socketfd, client->loginName, sizeof(DEFAULT_LOGIN_NAME));
         if (writeBytes < 0)
         {
             perror("write error");

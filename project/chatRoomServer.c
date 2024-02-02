@@ -592,25 +592,17 @@ int chatRoomServerAddPeopleInGroup()
 
 }
 
-/* 接收发送消息 */
+/* 寻找目标用户套接字并发送消息 */
 int chatRoomChatMessage(chatRoom * chat, clientNode * client, clientNode * requestClient)
 {
     /* 通信句柄 */
     int acceptfd = client->communicateFd;
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
+    AVLTreeNode * onlineNode = NULL;
 
-    if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&requestClient))
+    if ((onlineList = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient)) != NULL)
     {
-        AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient);
-        if (onlineNode == NULL)
-        {
-            perror("get node error");
-            close(acceptfd);
-            sqlite3_close(g_clientMsgDB);
-            return ERROR;
-        }
-
         requestClient = (clientNode *)onlineNode->data;
 
         /* 请求通信对象的通信句柄 */

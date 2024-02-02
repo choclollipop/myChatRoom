@@ -230,7 +230,7 @@ int chatRoomServerLoginIn(chatRoom * chat, clientNode *client)
         column = 0;
 
         /* 判断用户输入是否正确 */
-        sprintf(sql, "select id = '%s' from user where password = '%s'", client->loginName, client->loginPawd);
+        sprintf(sql, "select * from user where password = '%s' and id = '%s'", client->loginPawd, client->loginName);
         ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
         if (ret != SQLITE_OK)
         {
@@ -487,6 +487,8 @@ int chatRoomAddFriends(chatRoom * chat)
     {
         //测试
         printf("添加好友功能\n");
+        row = 0;
+        column = 0;
         readBytes = read(acceptfd, requestClient.loginName, sizeof(requestClient.loginName));
         if (readBytes < 0)
         {
@@ -494,22 +496,31 @@ int chatRoomAddFriends(chatRoom * chat)
             close(acceptfd);
             return ERROR;
         }
+        printf("request.loginName:%s\n", requestClient.loginName);
         if(!strncmp(requestClient.loginName, "q", sizeof(requestClient.loginName)))
         {
             return ON_SUCCESS;
         }
 
+        printf("request.loginName:%s\n", requestClient.loginName);
+
         sprintf(sql, "select id from user where id = '%s'", requestClient.loginName);
-        sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+        int ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
+        if (ret != SQLITE_OK)
+        {
+            printf("add friend select error : %s\n", errMsg);
+            return ERROR;
+        }
+
         if (row > 0)
         {
             printf("又该好友\n");
-            printf("%s\n", requestClient.loginName);
+            printf("request.loginName:%s\n", requestClient.loginName);
             if (balanceBinarySearchTreeIsContainAppointVal(onlineList, &requestClient))
             {
                 printf("插入\n");
-                sprintf(sql, "insert into friend values(id = '%s')", requestClient.loginName);
-                int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+                sprintf(sql, "insert into friend values('%s')", requestClient.loginName);
+                ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
                 if (ret != SQLITE_OK)
                 {
                     printf("insert error : %s\n", errMsg);
@@ -527,6 +538,7 @@ int chatRoomAddFriends(chatRoom * chat)
         else
         {
             write(acceptfd, "对方不存在，请确认输入的id是否正确", sizeof("对方不存在，请确认输入的id是否正确"));
+            printf("不存在\n");
             flag = 1;
         }
 

@@ -607,9 +607,6 @@ int chatRoomFunc(int socketfd, clientNode* client)
         /* 添加好友 */
         case F_FRIEND_INCREASE:
             chatRoomClientAddFriends(socketfd, friendTree);
-            // printf("请输入你要添加的好友id:\n");
-            // scanf("%s", nameBuffer);
-            // while ((c = getchar()) != EOF && c != '\n');
            
             break;
 

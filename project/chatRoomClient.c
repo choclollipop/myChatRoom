@@ -19,7 +19,7 @@
 
 
 #define SERVER_PORT 8080
-#define SERVER_ADDR "172.28.25.146"
+#define SERVER_ADDR "172.30.149.120"
 #define BUFFER_SIZE 300
 #define BUFFER_SQL  100   
 #define BUFFER_CHAT 401
@@ -31,6 +31,8 @@
 /* 建立数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
 sqlite3 * g_clientMsgDB = NULL;
+
+char chatBuffer11[DEFAULT_CHAT];
 
 /* 主界面功能选择 */
 enum CLIENT_CHOICE
@@ -303,7 +305,7 @@ int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
                 struct json_object *id = json_object_object_get(friendList, "id");
                 const char * idVal = json_object_get_string(id);
 
-                balanceBinarySearchTreeInsert(friendTree, idVal);
+                balanceBinarySearchTreeInsert(friendTree, (void *)idVal);
             }
             balanceBinarySearchTreeInOrderTravel(friendTree);
         }
@@ -347,19 +349,21 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
         }
 
         /* 判断是否同意 */
-        readBytes = read(socketfd, readBuffer, sizeof(readBuffer));
-        if (!strncmp(readBuffer, "对方同意了您的请求", sizeof(readBuffer)))
+        usleep(500);
+        printf("chatBuffer: %s\n", chatBuffer11);
+        if (!strncmp(chatBuffer11, "对方同意了您的请求", sizeof(chatBuffer11)))
         {
-            flag = 1;
+            balanceBinarySearchTreeInsert(friendTree, (void *)nameBuffer);
+            flag = 0;   
         }
         else
         {
-            /* 插入好友列表中 */
-            balanceBinarySearchTreeInsert(friendTree, (void *)nameBuffer);
-            flag = 0;
+            flag = 1;
         }
 
     } while (flag);
+
+    bzero(chatBuffer11, sizeof(chatBuffer11));
 
     return ON_SUCCESS;
 }
@@ -488,15 +492,11 @@ void * recv_message(void * arg)
     pthread_detach(pthread_self());
     int socketfd = *(int *)arg;
 
-    char chatBuffer[DEFAULT_CHAT];
-    bzero(chatBuffer, sizeof(chatBuffer));
-
     while (1)
     {
-        bzero(chatBuffer, sizeof(chatBuffer));
-        read(socketfd, chatBuffer, sizeof(chatBuffer));
+        read(socketfd, chatBuffer11, sizeof(chatBuffer11));
 
-        printf("%s\n", chatBuffer);
+        printf("%s\n", chatBuffer11);
     }
 
     pthread_exit(NULL);
@@ -619,6 +619,7 @@ int chatRoomFunc(int socketfd, clientNode* client)
 
             break;
 
+        /* 私聊 */
         case F_PRIVATE_CHAT:
             printf("请选择要私聊的对象:\n");
             scanf("%s", nameBuffer);
@@ -728,29 +729,7 @@ int main()
     bzero(client.loginName, sizeof(DEFAULT_LOGIN_NAME));
     bzero(client.loginPawd, sizeof(DEFAULT_LOGIN_PAWD));
 
-#if 0
-    /* 打开数据库 */
-    int ret = sqlite3_open("chatRoom.db", &g_chatRoomDB);
-    if (ret != SQLITE_OK)
-    {
-        perror("sqlite open error");
-        close(mainMenu);
-        close(socketfd);
-        exit(-1);
-    }
-
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
-
-    /* 数据库语句 */
-    char sql[BUFFER_SQL];
-    bzero(sql, sizeof(sql));
-
-#endif
     ssize_t writeBytes = 0;
-
-
 
     /* 开始执行功能 */
     while (1)

@@ -1,6 +1,7 @@
 #ifndef __CHAT_ROOM_CLIENT_H_
 #define __CHAT_ROOM_CLIENT_H_
 #include "common.h"
+#include "balanceBinarySearchTree.h"
 
 
 #define DEFAULT_LOGIN_NAME  21
@@ -29,12 +30,14 @@ int chatRoomClientRegister(int socketfd, clientNode *client);
 /* 删除好友 */
 int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree);
 
+/* 从服务器读取好友列表 */
+int readFriends(int socketfd, BalanceBinarySearchTree * friendTree);
+
 /* 群聊 */
 int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
 
 /* 拉人进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
-
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);

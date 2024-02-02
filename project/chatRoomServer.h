@@ -33,21 +33,21 @@ int chatRoomServerInit(int socketfd);
 void * chatHander(void * arg);
 
 /* 服务器登录 */
-int chatRoomServerLoginIn(int socketfd, clientNode *client, BalanceBinarySearchTree * onlineList);
+int chatRoomServerLoginIn(chatRoom * chat, clientNode *client);
 
 /* 服务器注册 */
-int chatRoomServerRegister(int socketfd, clientNode *client, BalanceBinarySearchTree * onlineList);
+int chatRoomServerRegister(chatRoom * chat, clientNode *client);
 
 /* 查看好友列表 */
-int chatRoomServerSearchFriends(int socketfd);
+int chatRoomServerSearchFriends(chatRoom * chat);
 
 /* 添加好友 */
-int chatRoomAddFriends(int socketfd, BalanceBinarySearchTree * onlineList);
+int chatRoomAddFriends(chatRoom * chat);
 
 /* 拉人进群 */
-int chatRoomServerAddPeopleInGroup(char *groupName, char *idBuffer);
+int chatRoomServerAddPeopleInGroup(const char *groupName, char *idBuffer);
 
 /* 创建群聊 */
-int chatRoomServerGroupChat(int socketfd);
+int chatRoomServerGroupChat(chatRoom * chat);
 
 #endif

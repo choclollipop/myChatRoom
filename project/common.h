@@ -1,6 +1,5 @@
 #ifndef __COMMON_H_
 #define __COMMON_H_
-#include "balanceBinarySearchTree.h"
 
 #define ELEMENTTYPE void*
 

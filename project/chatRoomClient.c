@@ -59,6 +59,9 @@ enum STATUS_CODE
     NULL_FRIEND,
 };
 
+/* 前置声明 */
+int chatRoomFunc(int socketfd, clientNode* client);
+
 /* AVL比较器：以登录名做比较 */
 int compareFunc(void * val1, void * val2)
 {
@@ -164,6 +167,13 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client)
         {
             /* 相等，登录成功 */
             printf("%s", buffer);
+
+            ret = chatRoomFunc(socketfd, client);
+            if (ret != ON_SUCCESS)
+            {
+                printf("chatRoomFunc error\n");
+                return ERROR;   
+            }
             flag = 0;
 
             break;
@@ -234,6 +244,7 @@ int chatRoomClientRegister(int socketfd, clientNode *client)
             }
 
             readBytes = read(socketfd, buffer, sizeof(buffer));
+            /*todo......*/
             if (readBytes < 0)
             {
                 perror("write error");
@@ -260,10 +271,11 @@ int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 {
     ssize_t readBytes = 0;
 
-    const char * friendListVal = NULL; 
+    char *friendListVal = NULL; 
+    // bzero(friendListVal, sizeof(friendListVal));
 
     int row = 0;
-    readBytes = read(socketfd, &row, sizeof(int) * row);
+    readBytes = read(socketfd, &row, sizeof(int));
     if (readBytes < 0)
     {
         perror("read error");
@@ -288,8 +300,10 @@ int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
             else
             {
                 struct json_object *friendList = json_tokener_parse(friendListVal);
-                struct json_object *id = json_object_object_get(friendListVal, "id");
-                balanceBinarySearchTreeInsert(friendTree, (void *)&id);
+                struct json_object *id = json_object_object_get(friendList, "id");
+                const char * idVal = json_object_get_string(id);
+
+                balanceBinarySearchTreeInsert(friendTree, idVal);
             }
             balanceBinarySearchTreeInOrderTravel(friendTree);
         }
@@ -304,45 +318,50 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
-    // char writeBuffer[BUFFER_SIZE];
-    // bzero(writeBuffer, sizeof(writeBuffer));
+    char readBuffer[BUFFER_SIZE];
+    bzero(readBuffer, sizeof(readBuffer));
 
     int choice = 0;
     char c = '0';
-
-    printf("请输入你要添加的好友id:\n");
-    scanf("%s", nameBuffer);
-    while ((c = getchar()) != EOF && c != '\n');
+    int flag = 0;
 
     ssize_t writeBytes = 0;
     ssize_t readBytes = 0;
 
-    /* 给添加的对象发送添加请求 */
-    writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
-    if (writeBytes < 0)
+    do
     {
-        perror("write error");
-        return ERROR;
-    }
+        printf("请输入你要添加的好友id(输入q退出):\n");
+        scanf("%s", nameBuffer);
+        while ((c = getchar()) != EOF && c != '\n');
+        if (!strncmp(nameBuffer, "q", sizeof(nameBuffer)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
+        /* 给添加的对象发送添加请求 */
+        writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
 
-    int Agree = 0;
-    readBytes = read(socketfd, &Agree, sizeof(Agree));
-    if (Agree == 1)
-    {
-        /* 同意 */
-        printf("对方已同意您的请求\n");
-        
-    }
-    else if (Agree == 2)
-    {
-        printf("对方拒绝了您的请求\n");
-    }
-    else
-    {
-        printf("对方暂时不在线\n");
-    }
+        /* 判断是否同意 */
+        readBytes = read(socketfd, readBuffer, sizeof(readBuffer));
+        if (!strncmp(readBuffer, "对方同意了您的请求", sizeof(readBuffer)))
+        {
+            flag = 1;
+        }
+        else
+        {
+            /* 插入好友列表中 */
+            balanceBinarySearchTreeInsert(friendTree, (void *)nameBuffer);
+            flag = 0;
+        }
 
+    } while (flag);
 
+    return ON_SUCCESS;
 }
 
 /* 群聊 */
@@ -522,7 +541,7 @@ int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 }
 
 /* 聊天室功能 */
-int chatRoomFunc(int socketfd, const clientNode* client)
+int chatRoomFunc(int socketfd, clientNode* client)
 {
     ssize_t writeBytes = 0;
     ssize_t readBytes = 0;

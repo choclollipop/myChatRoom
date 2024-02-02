@@ -638,6 +638,62 @@ int chatRoomChatMessage(chatRoom * chat, clientNode * client, clientNode * reque
     return ON_SUCCESS;
 }
 
+/* 删除好友 */
+int chatRoomDeleteFriens(chatRoom * chat, char *** result, int * row, int * column, char * errmsg)
+{
+    int acceptfd = chat->communicateFd;
+    BalanceBinarySearchTree * onlineList = chat->online;
+    clientNode delieteClient;
+    bzero(&delieteClient, sizeof(delieteClient));
+    bzero(delieteClient.loginPawd, sizeof(delieteClient.loginPawd));
+
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+    sprintf(sql, "select * from friend where id = '%s'", sizeof(delieteClient.loginName));
+    int flag = 0;
+    int ret = 0;
+    do
+    {
+        bzero(delieteClient.loginName, sizeof(delieteClient.loginName));
+        write(acceptfd, delieteClient.loginName, sizeof(delieteClient.loginName));
+        if (!strncmp(delieteClient.loginName, "q", sizeof(delieteClient.loginName)))
+        {
+            /* 退出 */
+            return ON_SUCCESS;
+        }
+
+        ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, &errmsg);
+        if (ret != SQLITE_OK)
+        {
+            printf("select friends error:", errmsg);
+            return ERROR;
+        }
+
+        if (row > 0)
+        {
+            bzero(sql, sizeof(sql));
+            sprintf(sql, "delete from friend where id = '%s'", delieteClient.loginName);
+
+            ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errmsg);
+            if (ret != SQLITE_OK)
+            {
+                printf("delete friends error:", errmsg);
+                return ERROR;
+            }
+
+            flag = 0;
+        }
+        else
+        {
+            write(acceptfd, "未找到该好友，请检查是否输入正确", sizeof("未找到该好友，请检查是否输入正确"));
+            flag = 1;
+        }
+
+    } while (flag);
+    
+    return ON_SUCCESS;
+}
+
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, clientNode * client)
 {
@@ -724,7 +780,15 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            /* code */
+            ret = chatRoomDeleteFriens(chat, &result, &row, &column, errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                close(g_clientMsgDB);
+                close(acceptfd);
+                return ERROR;
+            }
+
+            func_choice = 0;
             break;
 
         /* 私聊 */

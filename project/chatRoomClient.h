@@ -25,6 +25,9 @@ int chatRoomClientLoginIn(int socketfd, clientNode *client);
 /* 客户端的注册 */
 int chatRoomClientRegister(int socketfd, clientNode *client);
 
+/* 删除好友 */
+int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree);
+
 /* 群聊 */
 int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
 

@@ -17,7 +17,7 @@
 #include <json-c/json.h>
 
 #define SERVER_PORT     8080
-#define SERVER_ADDR     "172.30.149.120"
+#define SERVER_ADDR     "172.31.173.216"
 #define BUFFER_SIZE     300
 #define BUFFER_SQL      100   
 #define DEFAULT_CHAT    450
@@ -63,14 +63,14 @@ int chatRoomFunc(int socketfd, message * Msg);
 /* AVL比较器：以登录名做比较 */
 int compareFunc(void * val1, void * val2)
 {
-    clientNode * client = (clientNode *)val1;
-    clientNode * data = (clientNode *)val2;
+    char * client = (char *)val1;
+    char * data = (char *)val2;
 
-    if (client->loginName > data->loginName)
+    if (client > data)
     {
         return 1;
     }
-    else if (client->loginName < data->loginName)
+    else if (client < data)
     {
         return -1;
     }
@@ -82,8 +82,8 @@ int compareFunc(void * val1, void * val2)
 /* AVL打印器 */
 int printfFunc(void * val)
 {
-    clientNode * client = (clientNode *)val;
-    printf("id : %s\n", client->loginName);
+    char * client = (char *)val;
+    printf("id : %s\n", client);
 }
 
 /* 客户端的初始化 */
@@ -119,43 +119,102 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
 {
     ssize_t writeBytes = 0;
     char c = '0';
-#if 1
-    bzero(Msg->clientLogInName, sizeof(Msg->clientLogInName));
-    bzero(Msg->clientLogInPasswd, sizeof(Msg->clientLogInPasswd));
+    int ret = 0;
+    int flag = 0;
 
-#else
-    int choice = Msg->choice;
-    bzero(Msg, sizeof(struct message));
-#endif
-
-    printf("请输入你的登录名(不超过20个字符,输入q退出):\n");
-    scanf("%s", Msg->clientLogInName);
-    while ((c = getchar()) != EOF && c != '\n');
-
-    /* 判断是否退出 */
-    if (!strncmp(Msg->clientLogInName, "q", sizeof(Msg->clientLogInName)))
+    do
     {
-        write(socketfd, "q", sizeof("q"));
-        return ON_SUCCESS;
-    }
+        bzero(Msg->clientLogInName, sizeof(Msg->clientLogInName));
+        bzero(Msg->clientLogInPasswd, sizeof(Msg->clientLogInPasswd));
 
-    printf("请输入你的登录密码(输入q退出)：\n");
-    scanf("%s", Msg->clientLogInPasswd);
-    while ((c = getchar()) != EOF && c != '\n');
+        printf("请输入你的登录名(不超过20个字符,输入q退出):\n");
+        scanf("%s", Msg->clientLogInName);
+        while ((c = getchar()) != EOF && c != '\n');
 
-    /* 判断是否退出 */
-    if (!strncmp(Msg->clientLogInPasswd, "q", sizeof(Msg->clientLogInPasswd)))
-    {
-        write(socketfd, "q", sizeof("q"));
-        return ON_SUCCESS;
-    }
+        /* 判断是否退出 */
+        if (!strncmp(Msg->clientLogInName, "q", sizeof(Msg->clientLogInName)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
 
-    writeBytes = write(socketfd, Msg, sizeof(struct message));
-    if (writeBytes < 0)
-    {
-        perror("write error");
-        return ERROR;
-    }
+        printf("请输入你的登录密码(输入q退出)：\n");
+        scanf("%s", Msg->clientLogInPasswd);
+        while ((c = getchar()) != EOF && c != '\n');
+
+        /* 判断是否退出 */
+        if (!strncmp(Msg->clientLogInPasswd, "q", sizeof(Msg->clientLogInPasswd)))
+        {
+            write(socketfd, "q", sizeof("q"));
+            return ON_SUCCESS;
+        }
+
+        writeBytes = write(socketfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
+
+        ssize_t readBytes = read(socketfd, Msg, sizeof(struct  message));
+        if(readBytes < 0)
+        {
+            perror("read error");
+            pthread_exit(NULL);
+        }
+        switch (Msg->choice)
+        {
+        /* 接收的登录消息 */
+        case LOG_IN:
+            if (!strncmp(Msg->message, "用户名或密码输入错误，请重新输入", sizeof("用户名或密码输入错误，请重新输入")))
+            {
+                printf("%s\n", Msg->message);
+                flag = 1;
+                continue;
+            }
+            else
+            {
+                printf("%s\n", Msg->message);
+                flag = 0;
+                ret = chatRoomFunc(socketfd, Msg);
+                if (ret != ON_SUCCESS)
+                {
+                    printf("chatRoomFunc error");
+                    break;
+                }
+            }
+
+            break;
+
+        /* 接收的注册消息 */
+        case REGISTER:
+            if (!strncmp(Msg->message, "登录名已存在，请重新输入!", sizeof("登录名已存在，请重新输入!")))
+            {
+                printf("%s\n", Msg->message);
+                flag = 1;
+                continue;
+            }
+            else
+            {
+                printf("%s\n", Msg->message);
+                flag = 0;
+                ret = chatRoomFunc(socketfd, Msg);
+                if (ret != ON_SUCCESS)
+                {
+                    printf("chatRoomFunc error");
+                    break;
+                }
+            }
+
+            break;
+        
+        default:
+            break;
+        }
+
+    } while (flag);
+    
+    
 
     return ON_SUCCESS;
 }
@@ -185,7 +244,7 @@ int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
     {
         while (1)
         {
-            clientNode friend;
+            //clientNode friend;
             readBytes = read(socketfd, friendListVal, strlen(friendListVal));
             if (readBytes < 0)
             {
@@ -240,43 +299,37 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     return ON_SUCCESS;
 }
 
-/* 群聊 */
-int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+/* 创建群聊 */
+int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
 {
     /* 创建群聊 */
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
     char c = '0';
-    int flag = 0;
+    ssize_t writeBytes = 0;
 
     printf("请输入你想要创建的群聊名称：\n");
     scanf("%s", nameBuffer);
     while ((c = getchar()) != EOF && c != '\n');
 
-    /* 将群聊名称和登录用户名称传到服务器 */
-    struct json_object * group = json_object_new_object();
-    struct json_object * groupName = json_object_new_string(nameBuffer);
-    struct json_object * id = json_object_new_string(client->loginName);
+    strncpy(Msg->clientGroupName, nameBuffer, sizeof(Msg->clientGroupName));
 
-    json_object_object_add(group, "groupName", groupName);
-    json_object_object_add(group, "id", id);
-
-    const char * groupVal = json_object_to_json_string(group);
-    write(socketfd, groupVal, strlen(groupVal));
-
-    read(socketfd, &flag, sizeof(int));
-    if (flag == 1)
+    writeBytes = write(socketfd, Msg, sizeof(struct message));
+    if (writeBytes < 0)
     {
-        printf("创建群聊成功！\n");
-        /* 拉人进群 */
-        chatRoomClientAddPeopleInGroup(socketfd, client, friendTree);
-    }    
+        perror("write error");
+        return ERROR;
+    }
+
+    return ON_SUCCESS;
+       
 }
 
 /* 拉人进群 */
-int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+int chatRoomClientAddPeopleInGroup()
 {
+#if 0
     char idBuffer[DEFAULT_LOGIN_NAME];
     bzero(idBuffer, sizeof(idBuffer));
 
@@ -309,11 +362,13 @@ int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBina
             printf("添加成功！");
         }
     }
+#endif
 }
 
 /* 发起群聊 */
-int chatRoomClientStartGroupCommunicate(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree)
+int chatRoomClientStartGroupCommunicate()
 {
+#if 0
     int c = '0';
     ssize_t readBytes = 0;
 
@@ -355,92 +410,7 @@ int chatRoomClientStartGroupCommunicate(int socketfd, clientNode *client, Balanc
         printf("read : %s\n", readBuffer);
     }
       
-
-}
-
-/* 接收消息线程 */
-void * recv_message(void * arg)
-{
-    pthread_detach(pthread_self());
-
-    int socketfd = *(int *)arg;
-    int ret = 0;
-    ssize_t readBytes = 0;
-
-    message Msg;
-    bzero(&Msg, sizeof(Msg));
-    bzero(Msg.clientLogInName, sizeof(Msg.clientLogInName));
-    bzero(Msg.clientLogInPasswd, sizeof(Msg.clientLogInPasswd));
-
-    while (1)
-    {
-        readBytes = read(socketfd, &Msg, sizeof(struct  message));
-        if(readBytes < 0)
-        {
-            perror("read error");
-            pthread_exit(NULL);
-        }
-        switch (Msg.choice)
-        {
-        /* 接收的登录消息 */
-        case LOG_IN:
-            if (!strncmp(Msg.message, "用户名或密码输入错误，请重新输入", sizeof("用户名或密码输入错误，请重新输入")))
-            {
-                printf("%s\n", Msg.message);
-                ret = chatRoomClientLoginInRegister(socketfd, &Msg);
-                if (ret != ON_SUCCESS)
-                {
-                    printf("log in error\n");
-                    break;
-                }
-            }
-            else
-            {
-                printf("%s\n", Msg.message);
-                ret = chatRoomFunc(socketfd, &Msg);
-                if (ret != ON_SUCCESS)
-                {
-                    printf("chatRoomFunc error");
-                    break;
-                }
-            }
-
-            break;
-
-        /* 接收的注册消息 */
-        case REGISTER:
-            if (!strncmp(Msg.message, "登录名已存在，请重新输入!", sizeof("登录名已存在，请重新输入!")))
-            {
-                printf("%s\n", Msg.message);
-                ret = chatRoomClientLoginInRegister(socketfd, &Msg);
-                if (ret != ON_SUCCESS)
-                {
-                    printf("log in error\n");
-                    break;
-                }
-            }
-            else
-            {
-                printf("%s\n", Msg.message);
-                ret = chatRoomFunc(socketfd, &Msg);
-                if (ret != ON_SUCCESS)
-                {
-                    printf("chatRoomFunc error");
-                    break;
-                }
-            }
-
-            break;
-        
-        default:
-            break;
-        }
-        
-
-        // printf("%s\n", chatBuffer11);
-    }
-
-    pthread_exit(NULL);
+#endif
 }
 
 /* 功能界面接收消息 */
@@ -470,6 +440,8 @@ void * read_message(void * arg)
             perror("read message error");
             pthread_exit(NULL);
         }
+        //测试...............................................
+        printf("Msg.loginName:%s\n", Msg.clientLogInName);
 
         switch (Msg.func_choice)
         {
@@ -524,6 +496,16 @@ void * read_message(void * arg)
 
         /* 创建群聊 */
         case F_CREATE_GROUP:
+            if (!strncmp(Msg.message, "创建群聊成功", sizeof(Msg.message)))
+            {
+                printf("群聊已存在！");
+                /* 跳转到功能界面 */
+                /* todo... */
+            }
+            else
+            {
+                printf("%s\n", Msg.message);
+            }
 
             break;
 
@@ -627,7 +609,7 @@ int chatRoomFunc(int socketfd, message * Msg)
     {
         printf("%s\n", funcMenuBuffer);
         printf("请输入你需要的功能：\n");
-        scanf("%d", Msg->func_choice);
+        scanf("%d", &Msg->func_choice);
         while ((c = getchar()) != EOF && c != '\n');
 
         switch (Msg->func_choice)
@@ -661,12 +643,11 @@ int chatRoomFunc(int socketfd, message * Msg)
 
         /* 创建群聊 */
         case F_CREATE_GROUP:
-
+            chatRoomClientCreateGroupChat(socketfd, Msg);
             break;
 
         /* 群聊 */
         case F_GROUP_CHAT:
-            chatRoomClientGroupChat(socketfd, client, friendTree);
 
             break;
         
@@ -676,7 +657,7 @@ int chatRoomFunc(int socketfd, message * Msg)
 
         if (Msg->func_choice == F_EXIT)
         {
-            Msg->choice = EXIT;
+            write(socketfd, Msg, sizeof(struct message));
             return ON_SUCCESS;
         }
 
@@ -719,16 +700,12 @@ int main()
     ssize_t writeBytes = 0;
     char c = '0';
 
-    /* 接收消息线程 */
-    pthread_t recvtid;
-    pthread_create(&recvtid, NULL, recv_message, (void *)&socketfd);
-
     /* 开始执行功能 */
     while (1)
     {
         printf("%s\n", mainMenuBuffer);
         printf("请选择你需要的功能：\n");
-        scanf("%d", Msg.choice);
+        scanf("%d", &Msg.choice);
         while ((c = getchar()) != EOF && c != '\n');
 
         switch (Msg.choice)
@@ -737,13 +714,13 @@ int main()
         /* 登录 */
         case LOG_IN:
 
-            chatRoomClientLoginIn(socketfd, &Msg);
+            chatRoomClientLoginInRegister(socketfd, &Msg);
 
             break;
         
         /* 注册 */
         case REGISTER:
-            chatRoomClientRegister(socketfd, &Msg);
+            chatRoomClientLoginInRegister(socketfd, &Msg);
             break;
 
         default:
@@ -753,6 +730,7 @@ int main()
         /* 退出主界面 */
         if (Msg.choice == EXIT)
         {
+            write(socketfd, &Msg, sizeof(Msg));
             break;
         }
         

@@ -27,6 +27,7 @@
 #define DEFAULT_CHAT        401
 #define DEFAULT_LEN         40
 #define BUFFER_SIZE         300
+#define DIFF                5
 
 /* 创建数据库句柄 */
 sqlite3 * g_chatRoomDB = NULL;
@@ -208,12 +209,12 @@ int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int *
     ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("select error : %s\n", errMsg);
+        printf("select error : %s\n", *errMsg);
         return ERROR;
     }
 
     /* id和密码输入正确 */
-    if (row > 0)
+    if (*row > 0)
     {
         clientNode client;
         bzero(&client, sizeof(client));
@@ -283,12 +284,12 @@ int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int 
     ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("select error:%s\n", errMsg);
+        printf("select error:%s\n", *errMsg);
         close(acceptfd);
         exit(-1);
     }
 
-    if (row > 0)
+    if (*row > 0)
     {
         bzero(Msg->message, sizeof(Msg->message));
         strncpy(Msg->message, "登录名已存在，请重新输入!", sizeof(Msg->message));
@@ -307,7 +308,7 @@ int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int 
         ret = sqlite3_exec(g_chatRoomDB, sql, NULL, NULL, errMsg);
         if (ret != SQLITE_OK)
         {
-            printf("insert error: %s \n", errMsg);
+            printf("insert error: %s \n", *errMsg);
             close(acceptfd);
             pthread_exit(NULL);
         }
@@ -333,10 +334,10 @@ int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int 
 
         bzero(Msg->message, sizeof(Msg->message));
         strncpy(Msg->message, "注册成功！", sizeof(Msg->message));
-        writeBytes = write(acceptfd, &Msg, sizeof(struct message));
+        writeBytes = write(acceptfd, Msg, sizeof(struct message));
         if (writeBytes == -1)
         {
-            printf("write error:%s\n", errMsg);
+            printf("write error:%s\n", *errMsg);
             close(acceptfd);
             pthread_exit(NULL);
         }
@@ -441,7 +442,7 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
     int ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("add friend select error : %s\n", errMsg);
+        printf("add friend select error : %s\n", *errMsg);
         return ERROR;
     }
 
@@ -464,7 +465,7 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
             ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
             if (ret != SQLITE_OK)
             {
-                printf("insert error : %s\n", errMsg);
+                printf("insert error : %s\n", *errMsg);
                 return ERROR;
             }
 
@@ -494,8 +495,9 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
 }
 
 /* 拉人进群 */
-int chatRoomServerAddPeopleInGroup(const char *groupName, char *idBuffer)
+int chatRoomServerAddPeopleInGroup()
 {
+    #if 0
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
     char * errMsg = NULL;
@@ -509,97 +511,57 @@ int chatRoomServerAddPeopleInGroup(const char *groupName, char *idBuffer)
     }
 
     return ON_SUCCESS;
+    #endif
 }
 
 /* 创建群聊 */
-int chatRoomServerGroupChat(chatRoom * chat)
+int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg)
 {
     int acceptfd = chat->communicateFd;
-    int flag = 0;
-
-    char nameBuffer[DEFAULT_LOGIN_NAME];
-    bzero(nameBuffer, sizeof(nameBuffer));
-
-    char idBuffer[DEFAULT_LOGIN_NAME];
-    bzero(idBuffer, sizeof(idBuffer));
-
-    /* 读到群聊名称 */
-    read(acceptfd, nameBuffer, sizeof(nameBuffer));
-    struct json_object * group = json_tokener_parse(nameBuffer);
-    struct json_object * groupName = json_object_object_get(group, "groupName");
-    struct json_object * id = json_object_object_get(group, "id");
-
-    const char * groupNameVal = json_object_to_json_string(groupName);
-    const char * idVal = json_object_to_json_string(id);
+    ssize_t writeBytes = 0;
 
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-    /* 存储查询结果 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
 
-    char * errMsg = NULL;
-
-    /* 创建群的表 */
-    sprintf(sql, "create table if not exists groups (groupName text not null, id text not null, history text)");
-    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
-    if (ret != SQLITE_OK)
-    {
-        printf("create table error:%s\n", errMsg);
-        sqlite3_close(g_clientMsgDB);
-        exit(-1);
-    }
     /* 先判断我在不在里面 */
-    sprintf(sql, "select * from groups where groupName = '%s' and id = '%s'", groupNameVal, idVal);
-    ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
+    sprintf(sql, "select * from groups where groupName = '%s' and id = '%s'", Msg->clientGroupName, Msg->clientLogInName);
+    int ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("create table error:%s\n", errMsg);
+        printf("select * from groups:%s\n", *errMsg);
         sqlite3_close(g_clientMsgDB);
         exit(-1);
     }
 
-    /* 如果没有创建群聊--加入到表格 */
     if (row < 0)
     {
-        perror("get row error");
-        sqlite3_close(g_clientMsgDB);
-        exit(-1);
-        json_object_put(group);
+        perror("get row error in groups");
     }
     else if (row == 0)
     {
-        sprintf(sql, "insert into groups values('%s', '%s')", groupNameVal, idVal);
-        int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+        /* 如果没有创建群聊--加入到表格 */
+        sprintf(sql, "insert into groups values('%s', '%s')", Msg->clientGroupName, Msg->clientLogInName);
+        int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
         if (ret != SQLITE_OK)
         {
-            printf("create table error:%s\n", errMsg);
-            exit(-1);
+            printf("insert into groups:%s\n", *errMsg);
         }
     }
-    flag = 1; //创建完成，添加群聊成员
-
-    /* 发送邀请好友进群 */
-    write(acceptfd, &flag, sizeof(int));
-
-    bzero(idBuffer, sizeof(idBuffer));
-
-    read(acceptfd, idBuffer, sizeof(idBuffer));
-    chatRoomServerAddPeopleInGroup(groupNameVal , idBuffer);
     
-    write(acceptfd, "q", sizeof("q"));
-
-    json_object_put(group);
-
+    writeBytes = write(acceptfd, "创建群聊成功", sizeof"创建群聊成功");
+    if (writeBytes < 0)
+    {
+        perror("write error");
+        return ERROR;
+    }
     return  ON_SUCCESS;
-
 }
 
 /* 发起群聊 */
-int chatRoomStartCommunicate(chatRoom * chat, clientNode *requestClient)
+int chatRoomStartCommunicate()
 {
+    #if 0
     int acceptfd = chat->communicateFd;
 
     ssize_t readBytes = 0;
@@ -684,6 +646,7 @@ int chatRoomStartCommunicate(chatRoom * chat, clientNode *requestClient)
             }
 
         }
+        #endif
 
     }
 
@@ -724,16 +687,19 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
 
         while (1)
         {
-            read(acceptfd, &Msg, sizeof(struct message));
+            read(acceptfd, Msg, sizeof(struct message));
             if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
             {
                 bzero(Msg->message, sizeof(Msg->message));
                 strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
-                write(requestfd, &Msg, sizeof(struct message));
+                write(requestfd, Msg, sizeof(struct message));
                 return ON_SUCCESS;
             }
+            char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DIFF];
+            bzero(buffer, sizeof(buffer));
 
-            sprintf(Msg->message, "[%s]:%s", Msg->clientLogInName, Msg->message);
+            strncpy(buffer, Msg->message, sizeof(buffer) - 1);
+            sprintf(Msg->message, "[%s]:%s", Msg->clientLogInName, buffer);
             write(requestfd, Msg, sizeof(struct message));
         }
         
@@ -834,7 +800,7 @@ void * chatHander(void * arg)
 
         /* 注册功能 */
         case REGISTER:
-            ret = chatRoomServerRegister(chat, &Msg, &result, row, column, errMsg);
+            ret = chatRoomServerRegister(chat, &Msg, &result, &row, &column, &errMsg);
             if (ret != ON_SUCCESS)
             {
                 perror("LOGIN ERROR");
@@ -885,7 +851,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         return ERROR;
     }
     /* 创建储存好友的表 */
-    /* 存储数据库错误信息 */
     sprintf(sql, "create table if not exists %s (id text primary key not null)", Msg->clientLogInName);
     ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
     if (ret != SQLITE_OK)
@@ -894,6 +859,15 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         sqlite3_close(g_clientMsgDB);
         close(acceptfd);
         return ERROR;
+    }
+    /* 创建群的表 */
+    sprintf(sql, "create table if not exists groups (groupName text not null, id text not null, history text)");
+    ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", errMsg);
+        sqlite3_close(g_clientMsgDB);
+        exit(-1);
     }
 
     //测试
@@ -937,7 +911,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            ret = chatRoomDeleteFriens(chat, &result, &row, &column, errMsg);
+            ret = chatRoomDeleteFriens(chat, Msg, &result, &row, &column, errMsg);
             if (ret != ON_SUCCESS)
             {
                 printf("delete friend error\n");
@@ -962,20 +936,29 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
          /* 创建群聊 */
         case F_CREATE_GROUP:
-            chatRoomServerGroupChat(chat);
+
+            chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
 
             break;
 
         /* 发起群聊 */
         case F_GROUP_CHAT:
-            chatRoomStartCommunicate(chat, &requestClient);
+            chatRoomStartCommunicate();
             break;
         
         default:
             break;
         }
 
+        if (Msg->func_choice == F_EXIT)
+        {
+            close(acceptfd);
+            return ON_SUCCESS;
+        }
+
     }
+
+    return ON_SUCCESS;
 }
 
  

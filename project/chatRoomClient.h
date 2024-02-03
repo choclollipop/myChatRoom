@@ -6,6 +6,8 @@
 
 #define DEFAULT_LOGIN_NAME  21
 #define DEFAULT_LOGIN_PAWD  17
+#define DEFAULT_GROUP_NAME  21
+
 #define BUFFER_CHAT         401
 
 
@@ -21,11 +23,13 @@ typedef struct message
     int choice;
     /* 功能界面选择 */
     int func_choice;
-    /* 客户内容 */
-    clientLogInName[DEFAULT_LOGIN_NAME];
-    clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+      /* 客户内容 */
+    char clientLogInName[DEFAULT_LOGIN_NAME];
+    char clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 群聊名称 */
+    char clientGroupName[DEFAULT_GROUP_NAME];
     /* 消息发送对象 */
-    requestClientName[DEFAULT_LOGIN_NAME];
+    char requestClientName[DEFAULT_LOGIN_NAME];
     /* 消息内容 */
     char message[BUFFER_CHAT];
 } message;
@@ -46,17 +50,17 @@ int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, me
 /* 从服务器读取好友列表 */
 int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg);
 
-/* 群聊 */
-int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
+/* 创建群聊 */
+int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
 
 /* 私聊发送信息 */
 int chatRoomPrivateChat(message * Msg, int socketfd);
 
 /* 拉人进群 */
-int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
+int chatRoomClientAddPeopleInGroup();
 
 /* 发起群聊 */
-int chatRoomClientStartGroupCommunicate(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
+int chatRoomClientStartGroupCommunicate();
 
 
 #endif

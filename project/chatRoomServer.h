@@ -6,6 +6,8 @@
 
 #define DEFAULT_LOGIN_NAME  21
 #define DEFAULT_LOGIN_PAWD  17
+#define DEFAULT_GROUP_NAME  21
+
 #define BUFFER_CHAT         401
 
 typedef struct chatRoom
@@ -29,10 +31,12 @@ typedef struct message
     /* 功能界面选择 */
     int func_choice;
     /* 客户内容 */
-    clientLogInName[DEFAULT_LOGIN_NAME];
-    clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    char clientLogInName[DEFAULT_LOGIN_NAME];
+    char clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 群聊名称 */
+    char clientGroupName[DEFAULT_GROUP_NAME];
     /* 消息发送对象 */
-    requestClientName[DEFAULT_LOGIN_NAME];
+    char requestClientName[DEFAULT_LOGIN_NAME];
     /* 消息内容 */
     char message[BUFFER_CHAT];
 } message;
@@ -62,13 +66,15 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
 /* 删除好友 */
 int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char * errmsg);
 
-/* 拉人进群 */
-int chatRoomServerAddPeopleInGroup(const char *groupName, char *idBuffer);
-
 /* 寻找目标用户套接字并发送消息 */
 int chatRoomChatMessage(chatRoom * chat, message * Msg);
 
 /* 创建群聊 */
-int chatRoomServerGroupChat(chatRoom * chat);
+int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg);
+
+/* 拉人进群 */
+int chatRoomServerAddPeopleInGroup();
+
+int chatRoomStartCommunicate();
 
 #endif

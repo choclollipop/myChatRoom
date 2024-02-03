@@ -45,6 +45,7 @@ enum FUNC_CHOICE
     F_PRIVATE_CHAT,
     F_CREATE_GROUP,
     F_GROUP_CHAT,
+    F_EXIT,
 };
 
 /* 运行状态码 */
@@ -57,7 +58,7 @@ enum STATUS_CODE
 
 
 /* 前置声明 */
-int chatRoomFunc(int socketfd, clientNode* client);
+int chatRoomFunc(int socketfd, message * Msg);
 
 /* AVL比较器：以登录名做比较 */
 int compareFunc(void * val1, void * val2)
@@ -160,8 +161,6 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
 }
 
 
-
-
 /* 从服务器读取好友列表 */
 int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 {
@@ -209,55 +208,34 @@ int readFriends(int socketfd, BalanceBinarySearchTree * friendTree)
 }
 
 /* 添加好友 */
-int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree)
+int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg)
 {
     char nameBuffer[DEFAULT_LOGIN_NAME];
     bzero(nameBuffer, sizeof(nameBuffer));
 
-    char readBuffer[BUFFER_SIZE];
-    bzero(readBuffer, sizeof(readBuffer));
+    bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
 
     int choice = 0;
     char c = '0';
-    int flag = 0;
+
 
     ssize_t writeBytes = 0;
-    ssize_t readBytes = 0;
 
-    do
+    printf("请输入你要添加的好友id(输入q退出):\n");
+    scanf("%s", Msg->requestClientName);
+    while ((c = getchar()) != EOF && c != '\n');
+    if (!strncmp(nameBuffer, "q", sizeof(nameBuffer)))
     {
-        printf("请输入你要添加的好友id(输入q退出):\n");
-        scanf("%s", nameBuffer);
-        while ((c = getchar()) != EOF && c != '\n');
-        if (!strncmp(nameBuffer, "q", sizeof(nameBuffer)))
-        {
-            write(socketfd, "q", sizeof("q"));
-            return ON_SUCCESS;
-        }
-        /* 给添加的对象发送添加请求 */
-        writeBytes = write(socketfd, nameBuffer, sizeof(nameBuffer));
-        if (writeBytes < 0)
-        {
-            perror("write error");
-            return ERROR;
-        }
+        return ON_SUCCESS;
+    }
 
-        /* 判断是否同意 */
-        usleep(500);
-        printf("chatBuffer: %s\n", chatBuffer11);
-        if (!strncmp(chatBuffer11, "对方同意了您的请求", sizeof(chatBuffer11)))
-        {
-            balanceBinarySearchTreeInsert(friendTree, (void *)nameBuffer);
-            flag = 0;   
-        }
-        else
-        {
-            flag = 1;
-        }
-
-    } while (flag);
-
-    bzero(chatBuffer11, sizeof(chatBuffer11));
+    /* 给添加的对象发送添加请求 */
+    writeBytes = write(socketfd, Msg, sizeof(struct message));
+    if (writeBytes < 0)
+    {
+        perror("write error");
+        return ERROR;
+    }
 
     return ON_SUCCESS;
 }
@@ -465,48 +443,151 @@ void * recv_message(void * arg)
     pthread_exit(NULL);
 }
 
+/* 功能界面接收消息 */
+void * read_message(void * arg)
+{
+    /* 线程分离 */
+    pthread_detach(pthread_self());
+
+    chatRoom * chat = (chatRoom *)arg;
+    int socketfd = chat->socketfd;
+    BalanceBinarySearchTree * friendTree = chat->friend;
+
+    ssize_t readBytes = 0;
+
+    /* 接收信息体 */
+    message Msg;
+    bzero(&Msg, sizeof(Msg));
+    bzero(Msg.clientLogInName, sizeof(Msg.clientLogInName));
+    bzero(Msg.clientLogInPasswd, sizeof(Msg.clientLogInPasswd));
+    bzero(Msg.message, sizeof(Msg.message));
+
+    while (1)
+    {
+        readBytes = read(socketfd, &Msg, sizeof(Msg));
+        if (readBytes < 0)
+        {
+            perror("read message error");
+            pthread_exit(NULL);
+        }
+
+        switch (Msg.func_choice)
+        {
+        /* 查看好友 */
+        case F_FRIEND_VIEW:
+            
+            break;
+        
+        /* 添加好友 */
+        case F_FRIEND_INCREASE:
+            if (!strncmp(Msg.message, "对方同意了您的请求", sizeof(Msg.message)))
+            {
+                /* 同意请求,插入好友树 */
+                balanceBinarySearchTreeInsert(friendTree, Msg.requestClientName);
+                /* 测试......................................................................................... */
+                balanceBinarySearchTreeInOrderTravel(friendTree);
+            }
+            else
+            {
+                printf("%s\n", Msg.message);
+                chatRoomClientAddFriends(socketfd, friendTree, &Msg);
+            }
+
+            break;
+        
+        /* 删除好友 */
+        case F_FRIEND_DELETE:
+            if (!strncmp(Msg.message, "未找到该好友，请检查是否输入正确", sizeof(Msg.message)))
+            {
+                chatRoomDeleteFriends(socketfd, friendTree, &Msg);
+            }
+            else
+            {
+                printf("删除好友成功\n");
+            }
+            break;
+
+        /* 私聊 */
+        case F_PRIVATE_CHAT:
+
+            if (!strncmp(Msg.message, "对方在线，可以输入要传送的消息", sizeof(Msg.message)))
+            {
+                /* 在线发起私聊 */
+                chatRoomPrivateChat(&Msg, socketfd);
+            }
+            else
+            {
+                printf("%s\n", Msg.message);
+            }
+
+            break;
+
+        /* 创建群聊 */
+        case F_CREATE_GROUP:
+
+            break;
+
+        /* 群聊 */
+        case F_GROUP_CHAT:
+
+            break;
+        
+        default:
+            break;
+        }
+    }
+
+}
 
 /* 删除好友 */
-int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree)
+int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg)
 {
     /* 列出好友列表 */
     readFriends(socketfd, friendTree);
 
-    clientNode deleteClient;
-    bzero(&deleteClient, sizeof(deleteClient));
-    bzero(deleteClient.loginPawd, sizeof(deleteClient.loginPawd));
-    int flag = 0;
-
-    do
+    bzero(Msg, sizeof(Msg->requestClientName));
+    printf("请输入你要删除的好友id:(输入q退出)\n");
+    scanf("%s", Msg->requestClientName);
+    if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
     {
-        bzero(deleteClient.loginName, sizeof(deleteClient.loginName));
-        printf("请输入你要删除的好友id:(输入q退出)\n");
-        scanf("%s", deleteClient.loginName);
-        if (!strncmp(deleteClient.loginName, "q", sizeof(deleteClient.loginName)))
-        {
-            write(socketfd, "q", sizeof("q"));
-        }
+        return ON_SUCCESS;
+    }
 
-        int ret = balanceBinarySearchTreeDelete(friendTree, &deleteClient);
-        if (ret != 0)
-        {
-            flag = 1;
-        }
-        else
-        {
-            printf("删除好友成功\n");
-            flag = 0;
-        }
+    write(socketfd, Msg, sizeof(struct message));
 
-    } while (flag);
+    int ret = balanceBinarySearchTreeDelete(friendTree, Msg->requestClientName);
+    if (ret != 0)
+    {
+        printf("客户端删除好友失败");
+    }
     
     return ON_SUCCESS;
 }
 
-/* 聊天室功能 */
-int chatRoomFunc(int socketfd, clientNode* client)
+/* 私聊发送信息 */
+int chatRoomPrivateChat(message * Msg, int socketfd)
 {
-    ssize_t writeBytes = 0;
+    char c = '0';
+
+    while (1)
+    {
+        scanf("%s", Msg->message);
+        while ((c = getchar()) != EOF && c != '\n');
+        if(!strncmp(Msg->message, "q", sizeof(Msg->message)))
+        {
+            write(socketfd, Msg, sizeof(struct message));
+            return ON_SUCCESS;
+        }
+
+        write(socketfd, Msg, sizeof(struct message));
+    }
+
+    return ON_SUCCESS;
+}
+
+/* 聊天室功能 */
+int chatRoomFunc(int socketfd, message * Msg)
+{
     ssize_t readBytes = 0;
 
     /* 登录后/注册后打开功能页面 */
@@ -530,33 +611,26 @@ int chatRoomFunc(int socketfd, clientNode* client)
     BalanceBinarySearchTree * friendTree;
     balanceBinarySearchTreeInit(&friendTree, compareFunc, printfFunc);
 
-    int choice = 0;
     char c = '0';
     int ret = 0;
 
-    char nameBuffer[DEFAULT_LOGIN_NAME];
-    bzero(nameBuffer, sizeof(nameBuffer));
+    chatRoom chat;
+    bzero(&chat, sizeof(chat));
 
-    char writeBuffer[BUFFER_SIZE];
-    bzero(writeBuffer, sizeof(writeBuffer));
+    chat.socketfd = socketfd;
+    chat.friend = friendTree;
+
+    pthread_t readTid;
+    pthread_create(&readTid, NULL, read_message, &chat);
 
     while (1)
     {
         printf("%s\n", funcMenuBuffer);
         printf("请输入你需要的功能：\n");
-        scanf("%d", &choice);
+        scanf("%d", Msg->func_choice);
         while ((c = getchar()) != EOF && c != '\n');
 
-        /* ⭐发送选择的功能 */
-        writeBytes = write(socketfd, &choice, sizeof(choice));
-        if (writeBytes < 0)
-        {
-            perror("write error");
-            close(funcMenu);
-            return ERROR;
-        }
-
-        switch (choice)
+        switch (Msg->func_choice)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
@@ -565,79 +639,33 @@ int chatRoomFunc(int socketfd, clientNode* client)
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
-            chatRoomClientAddFriends(socketfd, friendTree);
+            chatRoomClientAddFriends(socketfd, friendTree, Msg);
            
             break;
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            chatRoomDeleteFriends(socketfd, friendTree);
+            chatRoomDeleteFriends(socketfd, friendTree, Msg);
 
             break;
 
         /* 私聊 */
         case F_PRIVATE_CHAT:
             printf("请选择要私聊的对象:\n");
-            scanf("%s", nameBuffer);
+            scanf("%s", Msg->requestClientName);
             while ((c = getchar()) != EOF && c != '\n');
 
-            /* 创建私聊json对象 */
-            struct json_object * clientObj = json_object_new_object();
-            if (clientObj == NULL)
-            {
-                perror("new jsonObject error");
-                return ERROR;
-            }
+            write(socketfd, Msg, sizeof(struct message));
 
-            ret = json_object_object_add(clientObj, client->loginName, json_object_new_string(nameBuffer));
-            if (ret < 0)
-            {
-                free(clientObj);
-                clientObj = NULL;
-                perror("add nameValue error");
-                return ERROR;
-            }
+            break;
 
-            /* 转成字符串 */
-            const char * clientPtr = json_object_to_json_string(clientObj);
-            int len = strlen(clientPtr);
-            write(socketfd, &len, sizeof(len));
-
-            writeBytes = write(socketfd, clientPtr, strlen(clientPtr) + 1);
-            if (writeBytes < 0)
-            {
-                free(clientObj);
-                clientObj = NULL;
-                close(socketfd);
-                close(funcMenu);
-                return ERROR;
-            }
-
-            /* 关闭json对象 */
-            json_object_put(clientObj);
-
-            usleep(500);
-            char chatWriteBuffer[BUFFER_CHAT];
-
-            while (1)
-            {
-                bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
-                scanf("%s", chatWriteBuffer);
-                while ((c = getchar()) != EOF && c != '\n');
-                if(!strncmp(chatWriteBuffer, "q", sizeof(chatWriteBuffer)))
-                {
-                    write(socketfd, "q", sizeof("q"));
-                    break;
-                }
-
-                write(socketfd, chatWriteBuffer, sizeof(chatWriteBuffer));
-
-            }
+        /* 创建群聊 */
+        case F_CREATE_GROUP:
 
             break;
 
         /* 群聊 */
-        case F_CREATE_GROUP:
+        case F_GROUP_CHAT:
             chatRoomClientGroupChat(socketfd, client, friendTree);
 
             break;
@@ -645,6 +673,13 @@ int chatRoomFunc(int socketfd, clientNode* client)
         default:
             break;
         }
+
+        if (Msg->func_choice == F_EXIT)
+        {
+            Msg->choice = EXIT;
+            return ON_SUCCESS;
+        }
+
     }
 
     return  ON_SUCCESS;

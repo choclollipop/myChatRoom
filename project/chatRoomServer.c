@@ -62,7 +62,7 @@ enum FUNC_CHOICE
 
 /* 前置声明 */
 /* 聊天室功能 */
-int chatRoomFunc(chatRoom * chat, clientNode * client);
+int chatRoomFunc(chatRoom * chat, message * Msg);
 
 /* AVL比较器：以登录名做比较 */
 int compareFunc(void * val1, void * val2)
@@ -341,7 +341,7 @@ int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int 
             pthread_exit(NULL);
         }
 
-        ret = chatRoomFunc(chat, &client);
+        ret = chatRoomFunc(chat, Msg);
         if (ret < 0)
         {
             printf("chatRoomFunc error\n");
@@ -418,90 +418,76 @@ int chatRoomServerSearchFriends(chatRoom * chat)
 }
 
 /* 添加好友 */
-int chatRoomAddFriends(chatRoom * chat)
+int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg)
 {
 
     int acceptfd = chat->communicateFd;
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
-    /* 存储查询结果 */
-    char ** result = NULL;
-    int row = 0;
-    int column = 0;
 
-    ssize_t readBytes = 0;
     ssize_t writeBytes = 0;
-    char * errMsg = NULL;
-
-    clientNode requestClient;
-    bzero(&requestClient, sizeof(requestClient));
-    bzero(requestClient.loginName, sizeof(requestClient.loginName));
-    // bzero(requestClient.loginPawd, sizeof(requestClient.loginPawd));
     
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-    int flag = 0;
-    do
+
+    //测试...........................................................................................
+    printf("添加好友功能\n");
+
+    printf("request.loginName:%s\n", Msg->requestClientName);
+
+
+    sprintf(sql, "select id from user where id = '%s'", Msg->requestClientName);
+    int ret = sqlite3_get_table(g_chatRoomDB, sql, result, row, column, errMsg);
+    if (ret != SQLITE_OK)
     {
-        //测试
-        printf("添加好友功能\n");
-        row = 0;
-        column = 0;
-        readBytes = read(acceptfd, requestClient.loginName, sizeof(requestClient.loginName));
-        if (readBytes < 0)
-        {
-            perror("read error");
-            close(acceptfd);
-            return ERROR;
-        }
-        printf("request.loginName:%s\n", requestClient.loginName);
-        if(!strncmp(requestClient.loginName, "q", sizeof(requestClient.loginName)))
-        {
-            return ON_SUCCESS;
-        }
+        printf("add friend select error : %s\n", errMsg);
+        return ERROR;
+    }
 
-        printf("request.loginName:%s\n", requestClient.loginName);
+    if (row > 0)
+    {
+        //测试.....................................................................................
+        printf("又该好友\n");
 
-        sprintf(sql, "select id from user where id = '%s'", requestClient.loginName);
-        int ret = sqlite3_get_table(g_chatRoomDB, sql, &result, &row, &column, &errMsg);
-        if (ret != SQLITE_OK)
-        {
-            printf("add friend select error : %s\n", errMsg);
-            return ERROR;
-        }
+        clientNode client;
+        bzero(&client, sizeof(client));
+        bzero(client.loginName, sizeof(client.loginName));
+        strncpy(client.loginName, Msg->requestClientName, sizeof(Msg->requestClientName));
 
-        if (row > 0)
+        if (balanceBinarySearchTreeIsContainAppointVal(onlineList, &client))
         {
-            printf("又该好友\n");
-            printf("request.loginName:%s\n", requestClient.loginName);
-            if (balanceBinarySearchTreeIsContainAppointVal(onlineList, &requestClient))
+            //测试.............................................................................................
+            printf("插入\n");
+
+            sprintf(sql, "insert into friend values('%s')", Msg->requestClientName);
+            ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
+            if (ret != SQLITE_OK)
             {
-                printf("插入\n");
-                sprintf(sql, "insert into friend values('%s')", requestClient.loginName);
-                ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
-                if (ret != SQLITE_OK)
-                {
-                    printf("insert error : %s\n", errMsg);
-                    return ERROR;
-                }
-                printf("同意请求\n");
-                write(acceptfd, "对方同意了您的请求", sizeof("对方同意了您的请求"));
+                printf("insert error : %s\n", errMsg);
+                return ERROR;
             }
-            else
-            {
-                write(acceptfd, "对方不在线，请稍后再试！", sizeof("对方不在线，请稍后再试！"));
-            }
-            flag = 0;
+
+            printf("同意请求\n");
+            bzero(Msg->message, sizeof(Msg->message));
+            strncpy(Msg->message, "对方同意了您的请求", sizeof("对方同意了您的请求"));
+            write(acceptfd, Msg, sizeof(struct message));
         }
         else
         {
-            write(acceptfd, "对方不存在，请确认输入的id是否正确", sizeof("对方不存在，请确认输入的id是否正确"));
-            printf("不存在\n");
-            flag = 1;
+            bzero(Msg->message, sizeof(Msg->message));
+            strncpy(Msg->message, "对方不在线，请稍后再试！", sizeof("对方不在线，请稍后再试！"));
+            write(acceptfd, Msg, sizeof(struct message));
         }
 
-    } while (flag);
+    }
+    else
+    {
+        write(acceptfd, "对方不存在，请确认输入的id是否正确", sizeof("对方不存在，请确认输入的id是否正确"));
+        //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
+        printf("不存在\n");
+    }
+
 
     return ON_SUCCESS;
     
@@ -702,42 +688,56 @@ int chatRoomStartCommunicate(chatRoom * chat, clientNode *requestClient)
     }
 
 /* 寻找目标用户套接字并发送消息 */
-int chatRoomChatMessage(chatRoom * chat, clientNode * client, clientNode * requestClient)
+int chatRoomChatMessage(chatRoom * chat, message * Msg)
 {
     /* 通信句柄 */
-    int acceptfd = client->communicateFd;
+    int acceptfd = chat->communicateFd;
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
+
     AVLTreeNode * onlineNode = NULL;
 
-    if ((onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient)) != NULL)
+    clientNode client;
+    bzero(client.loginName, sizeof(client.loginName));
+    
+    strncpy(client.loginName, Msg->requestClientName, sizeof(client.loginName));
+
+    if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
     {
-        requestClient = (clientNode *)onlineNode->data;
+        AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&client);
+        if (onlineNode == NULL)
+        {
+            perror("get node error");
+            close(acceptfd);
+            sqlite3_close(g_clientMsgDB);
+            return ERROR;
+        }
 
+        client = *(clientNode *)onlineNode->data;
         /* 请求通信对象的通信句柄 */
-        int requestfd = requestClient->communicateFd;
+        int requestfd = client.communicateFd;
         
-        char chatBuffer[DEFAULT_CHAT];
-        char chatWriteBuffer[BUFFER_CHAT];
+        bzero(Msg->message, sizeof(struct message));
+        strncpy(Msg->message, "对方在线，可以输入要传送的消息", sizeof(Msg->message));
 
-        write(acceptfd, "对方在线，可以输入要传送的消息", sizeof("对方在线，可以输入要传送的消息"));
+        write(acceptfd, Msg, sizeof(struct message));
 
         while (1)
         {
-            bzero(chatBuffer,sizeof(chatBuffer));
-            bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
-            read(acceptfd, chatBuffer, sizeof(chatBuffer));
-            if (!strncmp(chatBuffer, "q", sizeof(chatBuffer)))
+            read(acceptfd, &Msg, sizeof(struct message));
+            if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
             {
-                write(requestfd, "对方结束会话", sizeof("对方结束会话"));
+                bzero(Msg->message, sizeof(Msg->message));
+                strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
+                write(requestfd, &Msg, sizeof(struct message));
                 return ON_SUCCESS;
             }
 
-            sprintf(chatWriteBuffer, "[%s]:%s", client->loginName, chatBuffer);
-            write(requestfd, chatWriteBuffer, sizeof(chatWriteBuffer));
+            sprintf(Msg->message, "[%s]:%s", Msg->clientLogInName, Msg->message);
+            write(requestfd, Msg, sizeof(struct message));
         }
         
-        return ON_SUCCESS;
+        
     }
     else
     {
@@ -749,57 +749,41 @@ int chatRoomChatMessage(chatRoom * chat, clientNode * client, clientNode * reque
 
 
 /* 删除好友 */
-int chatRoomDeleteFriens(chatRoom * chat, char *** result, int * row, int * column, char * errmsg)
+int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char * errmsg)
 {
     int acceptfd = chat->communicateFd;
-    BalanceBinarySearchTree * onlineList = chat->online;
-    clientNode delieteClient;
-    bzero(&delieteClient, sizeof(delieteClient));
-    // bzero(delieteClient.loginPawd, sizeof(delieteClient.loginPawd));
 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-    sprintf(sql, "select * from friend where id = '%s'", delieteClient.loginName);
-    int flag = 0;
+    sprintf(sql, "select * from friend where id = '%s'", Msg->requestClientName);
     int ret = 0;
-    do
-    {
-        bzero(delieteClient.loginName, sizeof(delieteClient.loginName));
-        write(acceptfd, delieteClient.loginName, sizeof(delieteClient.loginName));
-        if (!strncmp(delieteClient.loginName, "q", sizeof(delieteClient.loginName)))
-        {
-            /* 退出 */
-            return ON_SUCCESS;
-        }
 
-        ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, &errmsg);
+    ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, &errmsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("select friends error:%s\n", errmsg);
+        return ERROR;
+    }
+
+    if (row > 0)
+    {
+        bzero(sql, sizeof(sql));
+        sprintf(sql, "delete from friend where id = '%s'", Msg->requestClientName);
+
+        ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errmsg);
         if (ret != SQLITE_OK)
         {
-            printf("select friends error:%s\n", errmsg);
+            printf("delete friends error:%s\n", errmsg);
             return ERROR;
         }
 
-        if (row > 0)
-        {
-            bzero(sql, sizeof(sql));
-            sprintf(sql, "delete from friend where id = '%s'", delieteClient.loginName);
-
-            ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errmsg);
-            if (ret != SQLITE_OK)
-            {
-                printf("delete friends error:%s\n", errmsg);
-                return ERROR;
-            }
-
-            flag = 0;
-        }
-        else
-        {
-            write(acceptfd, "未找到该好友，请检查是否输入正确", sizeof("未找到该好友，请检查是否输入正确"));
-            flag = 1;
-        }
-
-    } while (flag);
+    }
+    else
+    {
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "未找到该好友，请检查是否输入正确", sizeof("未找到该好友，请检查是否输入正确"));
+        write(acceptfd, Msg, sizeof(struct message));
+    }
     
     return ON_SUCCESS;
 }
@@ -875,18 +859,14 @@ void * chatHander(void * arg)
 }
 
 /* 聊天室功能 */
-int chatRoomFunc(chatRoom * chat, clientNode * client)
+int chatRoomFunc(chatRoom * chat, message * Msg)
 {
     /* 通信句柄 */
-    int acceptfd = client->communicateFd;
+    int acceptfd = chat->communicateFd;
     /* 在线列表 */
     BalanceBinarySearchTree * onlineList = chat->online;
 
     ssize_t readBytes = 0;
-    ssize_t writeBytes = 0;
-
-    char nameBuffer[DEFAULT_LOGIN_NAME];
-    bzero(nameBuffer, sizeof(nameBuffer));
 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
@@ -897,12 +877,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     int column = 0;
     char * errMsg = NULL;
 
-    /* 打开数据库 */
-    char ptr[DEFAULT_DATABASE];
-    bzero(ptr, sizeof(ptr));
-    sprintf(ptr, "%s.db", client->loginName);
-
-    int ret = sqlite3_open(ptr, &g_clientMsgDB);
+    int ret = sqlite3_open("clientMsg.db", &g_clientMsgDB);
     if (ret != SQLITE_OK)
     {
         perror("sqlite open error");
@@ -911,7 +886,7 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
     }
     /* 创建储存好友的表 */
     /* 存储数据库错误信息 */
-    strncpy(sql, "create table if not exists friend (id text primary key not null)", sizeof("create table if not exists friend (id text primary key not null)"));
+    sprintf(sql, "create table if not exists %s (id text primary key not null)", Msg->clientLogInName);
     ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
     if (ret != SQLITE_OK)
     {
@@ -921,28 +896,18 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
         return ERROR;
     }
 
-    /* 创建请求对象 */
-    clientNode requestClient;
-    bzero(&requestClient, sizeof(requestClient));
-    bzero(&requestClient, sizeof(requestClient.loginName));
-    // bzero(&requestClient, sizeof(requestClient.loginPawd));
-
-    int func_choice = 0;
-
     //测试
     printf("功能界面\n");
     while (1)
     {
-        /* ⭐读取功能 */
-        readBytes = read(acceptfd, &func_choice, sizeof(func_choice));
+        readBytes = read(acceptfd, &Msg, sizeof(Msg));
         if (readBytes < 0)
         {
             perror("read error");
-            close(acceptfd);
-            return ERROR;
+            return ON_SUCCESS;
         }
 
-        switch (func_choice)
+        switch (Msg->func_choice)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
@@ -950,20 +915,24 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
             if (ret != ON_SUCCESS)
             {
                 printf("add friend error\n");
-                return ERROR;
+                break;
             }
-            func_choice = 0;
+
             break;
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
-            ret = chatRoomAddFriends(chat);
+            result = NULL;
+            row = 0;
+            column = 0;
+
+            ret = chatRoomAddFriends(chat, Msg, &result, &row, &column, &errMsg);
             if (ret != ON_SUCCESS)
             {
                 printf("add friend error\n");
-                return ERROR;
+                break;
             }
-            func_choice = 0;
+
             break;
 
         /* 删除好友 */
@@ -971,95 +940,22 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
             ret = chatRoomDeleteFriens(chat, &result, &row, &column, errMsg);
             if (ret != ON_SUCCESS)
             {
-                sqlite3_close(g_clientMsgDB);
-                close(acceptfd);
-                return ERROR;
+                printf("delete friend error\n");
+                break;
             }
 
-            func_choice = 0;
             break;
 
         case F_PRIVATE_CHAT:
-            int len = 0;
-            read(acceptfd, &len, sizeof(len));
 
             /* 打印在线列表 */
             balanceBinarySearchTreeInOrderTravel(onlineList);
 
-            char * ptrObj = (char *)malloc(sizeof(char) * (len + 1));
-            if (ptrObj == NULL)
+            ret = chatRoomChatMessage(chat, Msg);
+            if (ret != ON_SUCCESS)
             {
-                perror("malloc error");
-                close(acceptfd);
-                sqlite3_close(g_clientMsgDB);
-                return ERROR;
-            }
-            bzero(ptrObj, sizeof(ptrObj));        
-
-            /* 读取对象 */
-            read(acceptfd, ptrObj, len + 1);
-            /* 将字符串转换成json对象 */
-            struct json_object * requestObj = json_tokener_parse(ptrObj);
-            /* 取用户名 */
-            const char * requestPtr = json_object_get_string(json_object_object_get(requestObj, client->loginName));
-            printf("requestPtr: %s\n", requestPtr);
-            printf("requestPtr:%ld\n", strlen(requestPtr));
-
-            strncpy(requestClient.loginName, requestPtr, sizeof(requestClient.loginName));
-            printf("requestClient.loginNama1:%s\n", requestClient.loginName);
-
-            /* 关闭json对象 */
-            json_object_put(requestObj);
-
-            if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&requestClient))
-            {
-                AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&requestClient);
-                if (onlineNode == NULL)
-                {
-                    perror("get node error");
-                    close(acceptfd);
-                    sqlite3_close(g_clientMsgDB);
-                    return ERROR;
-                }
-
-                requestClient = *(clientNode *)onlineNode->data;
-                printf("requestClient.loginName : %s\n", requestClient.loginName);
-                printf("requestClient.communicateFd : %d\n", requestClient.communicateFd);
-                printf("acceptfd : %d\n", acceptfd);
-                /* 请求通信对象的通信句柄 */
-                int requestfd = requestClient.communicateFd;
-                
-                char chatBuffer[DEFAULT_CHAT];
-                char chatWriteBuffer[BUFFER_CHAT];
-
-                write(acceptfd, "对方在线，可以输入要传送的消息", sizeof("对方在线，可以输入要传送的消息"));
-
-                while (1)
-                {
-                    bzero(chatBuffer,sizeof(chatBuffer));
-                    bzero(chatWriteBuffer, sizeof(chatWriteBuffer));
-                    read(acceptfd, chatBuffer, sizeof(chatBuffer));
-                    if (!strncmp(chatBuffer, "q", sizeof(chatBuffer)))
-                    {
-                        write(requestfd, "对方结束会话", sizeof("对方结束会话"));
-                        break;
-                    }
-
-                    sprintf(chatWriteBuffer, "[%s]:%s", client->loginName, chatBuffer);
-                    write(requestfd, chatWriteBuffer, sizeof(chatWriteBuffer));
-                }
-                
-                
-            }
-            else
-            {
-                write(acceptfd, "对方不在线，请给他留言(输出q退出)", sizeof("对方不在线，请给他留言(输出q退出)"));
-            }    
-
-            if (ptrObj)
-            {
-                free(ptrObj);
-                ptrObj = NULL;
+                printf("private chat error\n");
+                break;
             }
 
             break;
@@ -1067,17 +963,12 @@ int chatRoomFunc(chatRoom * chat, clientNode * client)
          /* 创建群聊 */
         case F_CREATE_GROUP:
             chatRoomServerGroupChat(chat);
-            func_choice = 0;
+
             break;
 
         /* 发起群聊 */
         case F_GROUP_CHAT:
             chatRoomStartCommunicate(chat, &requestClient);
-            break;
-
-        /* 退出 */
-        case F_EXIT:
-
             break;
         
         default:

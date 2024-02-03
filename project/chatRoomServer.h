@@ -31,6 +31,8 @@ typedef struct message
     /* 客户内容 */
     clientLogInName[DEFAULT_LOGIN_NAME];
     clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 消息发送对象 */
+    requestClientName[DEFAULT_LOGIN_NAME];
     /* 消息内容 */
     char message[BUFFER_CHAT];
 } message;
@@ -55,10 +57,16 @@ int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int 
 int chatRoomServerSearchFriends(chatRoom * chat);
 
 /* 添加好友 */
-int chatRoomAddFriends(chatRoom * chat);
+int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * row, int * cloumn, char ** errMsg);
+
+/* 删除好友 */
+int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char * errmsg);
 
 /* 拉人进群 */
 int chatRoomServerAddPeopleInGroup(const char *groupName, char *idBuffer);
+
+/* 寻找目标用户套接字并发送消息 */
+int chatRoomChatMessage(chatRoom * chat, message * Msg);
 
 /* 创建群聊 */
 int chatRoomServerGroupChat(chatRoom * chat);

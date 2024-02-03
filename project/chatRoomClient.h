@@ -9,11 +9,11 @@
 #define BUFFER_CHAT         401
 
 
-typedef struct clientNode
+typedef struct chatRoom
 {
-    char loginName[DEFAULT_LOGIN_NAME];
-    char loginPawd[DEFAULT_LOGIN_PAWD];
-} clientNode;
+    int socketfd;
+    BalanceBinarySearchTree * friend;
+} chatRoom;
 
 typedef struct message
 {
@@ -24,6 +24,8 @@ typedef struct message
     /* 客户内容 */
     clientLogInName[DEFAULT_LOGIN_NAME];
     clientLogInPasswd[DEFAULT_LOGIN_PAWD];
+    /* 消息发送对象 */
+    requestClientName[DEFAULT_LOGIN_NAME];
     /* 消息内容 */
     char message[BUFFER_CHAT];
 } message;
@@ -39,13 +41,16 @@ int chatRoomClientInit(int socketfd);
 int chatRoomClientLoginInRegister(int socketfd, message * Msg);
 
 /* 删除好友 */
-int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree);
+int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg);
 
 /* 从服务器读取好友列表 */
-int readFriends(int socketfd, BalanceBinarySearchTree * friendTree);
+int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg);
 
 /* 群聊 */
 int chatRoomClientGroupChat(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);
+
+/* 私聊发送信息 */
+int chatRoomPrivateChat(message * Msg, int socketfd);
 
 /* 拉人进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, clientNode *client, BalanceBinarySearchTree * friendTree);

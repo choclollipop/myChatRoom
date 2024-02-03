@@ -59,11 +59,13 @@ int chatRoomPrivateChat(message * Msg, int socketfd);
 /* 创建群聊 */
 int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
 
-/* 拉人进群 */
+/* 邀请好友进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree);
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate();
 
+/* 聊天室功能 */
+int chatRoomFunc(int socketfd, message * Msg);
 
 #endif

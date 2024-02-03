@@ -95,25 +95,22 @@ int printfFunc(void * val)
 int chatRoomClientInit(int socketfd)
 {
     struct sockaddr_in localAddress;
+    
     localAddress.sin_family = AF_INET;
     localAddress.sin_port = htons(SERVER_PORT);
-
     int ret = inet_pton(AF_INET, SERVER_ADDR, &localAddress.sin_addr.s_addr);
     if (ret == -1)
     {
         perror("inet_pton error");
-        close(socketfd);
-        exit(-1);
     }
 
     socklen_t localAddressLen = sizeof(localAddress);
 
+    /* 客户端连接 */
     ret = connect(socketfd, (struct sockaddr *)&localAddress, localAddressLen);
     if (ret == -1)
     {
         perror("connect error");
-        close(socketfd);
-        exit(-1);
     }
 
     return ON_SUCCESS;
@@ -131,7 +128,8 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
     {
         bzero(Msg->clientLogInName, sizeof(Msg->clientLogInName));
         bzero(Msg->clientLogInPasswd, sizeof(Msg->clientLogInPasswd));
-
+        
+        /* 获取用户名添加到Msg结构体中 */
         printf("请输入你的登录名(不超过20个字符,输入q退出):\n");
         scanf("%s", Msg->clientLogInName);
         while ((c = getchar()) != EOF && c != '\n');
@@ -143,6 +141,7 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             return ON_SUCCESS;
         }
 
+        /* 获取密码添加到Msg结构体中 */
         printf("请输入你的登录密码(输入q退出)：\n");
         scanf("%s", Msg->clientLogInPasswd);
         while ((c = getchar()) != EOF && c != '\n');
@@ -154,6 +153,7 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             return ON_SUCCESS;
         }
 
+        /* 将结构体发送给服务器 */
         writeBytes = write(socketfd, Msg, sizeof(struct message));
         if (writeBytes < 0)
         {
@@ -165,8 +165,9 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
         if(readBytes < 0)
         {
             perror("read error");
-            pthread_exit(NULL);
+            //pthread_exit(NULL);
         }
+
         switch (Msg->choice)
         {
         /* 接收的登录消息 */
@@ -219,20 +220,20 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
 
     } while (flag);
     
-    
-
     return ON_SUCCESS;
 }
-
 
 /* 从服务器读取好友列表 */
 int readFriends(int socketfd, message * Msg)
 {
-    ssize_t readBytes = 0;
 
     /* 只需要将msg里面的choice传过去就好 */
     ssize_t writeBytes = write(socketfd, Msg, sizeof(Msg));
-    
+    if (writeBytes == -1)
+    {
+        perror("write error in readFriends");
+    }
+
     sem_wait(&finish);
 
     return ON_SUCCESS;
@@ -301,6 +302,52 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     return ON_SUCCESS;
 }
 
+/* 删除好友 */
+int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg)
+{
+    /* 列出好友列表 */
+    readFriends(socketfd, Msg);
+
+    bzero(Msg, sizeof(Msg->requestClientName));
+    printf("请输入你要删除的好友id:(输入q退出)\n");
+    scanf("%s", Msg->requestClientName);
+    if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
+    {
+        return ON_SUCCESS;
+    }
+
+    write(socketfd, Msg, sizeof(struct message));
+
+    int ret = balanceBinarySearchTreeDelete(friendTree, Msg->requestClientName);
+    if (ret != 0)
+    {
+        printf("客户端删除好友失败");
+    }
+    
+    return ON_SUCCESS;
+}
+
+/* 私聊发送信息 */
+int chatRoomPrivateChat(message * Msg, int socketfd)
+{
+    char c = '0';
+
+    while (1)
+    {
+        scanf("%s", Msg->message);
+        while ((c = getchar()) != EOF && c != '\n');
+        if(!strncmp(Msg->message, "q", sizeof(Msg->message)))
+        {
+            write(socketfd, Msg, sizeof(struct message));
+            return ON_SUCCESS;
+        }
+
+        write(socketfd, Msg, sizeof(struct message));
+    }
+
+    return ON_SUCCESS;
+}
+
 /* 创建群聊 */
 int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
 {
@@ -332,6 +379,7 @@ int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
        
 }
 
+/* 邀请好友进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree)
 {
 #if 1
@@ -371,8 +419,6 @@ int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySea
     }
 #endif
 }
-
-
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate()
@@ -428,6 +474,7 @@ void * read_message(void * arg)
     /* 线程分离 */
     pthread_detach(pthread_self());
 
+    /* 拿到已保存信息的chatRoom */
     chatRoom * chat = (chatRoom *)arg;
     int socketfd = chat->socketfd;
     BalanceBinarySearchTree * friendTree = chat->friend;
@@ -543,52 +590,6 @@ void * read_message(void * arg)
 
 }
 
-/* 删除好友 */
-int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg)
-{
-    /* 列出好友列表 */
-    readFriends(socketfd, Msg);
-
-    bzero(Msg, sizeof(Msg->requestClientName));
-    printf("请输入你要删除的好友id:(输入q退出)\n");
-    scanf("%s", Msg->requestClientName);
-    if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
-    {
-        return ON_SUCCESS;
-    }
-
-    write(socketfd, Msg, sizeof(struct message));
-
-    int ret = balanceBinarySearchTreeDelete(friendTree, Msg->requestClientName);
-    if (ret != 0)
-    {
-        printf("客户端删除好友失败");
-    }
-    
-    return ON_SUCCESS;
-}
-
-/* 私聊发送信息 */
-int chatRoomPrivateChat(message * Msg, int socketfd)
-{
-    char c = '0';
-
-    while (1)
-    {
-        scanf("%s", Msg->message);
-        while ((c = getchar()) != EOF && c != '\n');
-        if(!strncmp(Msg->message, "q", sizeof(Msg->message)))
-        {
-            write(socketfd, Msg, sizeof(struct message));
-            return ON_SUCCESS;
-        }
-
-        write(socketfd, Msg, sizeof(struct message));
-    }
-
-    return ON_SUCCESS;
-}
-
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, message * Msg)
 {
@@ -612,11 +613,9 @@ int chatRoomFunc(int socketfd, message * Msg)
         return ERROR;
     }
 
+    /* 初始化一个好友树和chat */
     BalanceBinarySearchTree * friendTree;
     balanceBinarySearchTreeInit(&friendTree, compareFunc, printfFunc);
-
-    char c = '0';
-    int ret = 0;
 
     chatRoom chat;
     bzero(&chat, sizeof(chat));
@@ -624,6 +623,10 @@ int chatRoomFunc(int socketfd, message * Msg)
     chat.socketfd = socketfd;
     chat.friend = friendTree;
 
+    char c = '0';
+    int ret = 0;
+
+    /* 创建读线程 -- 主要读Msg.message ---服务器的回复 */
     pthread_t readTid;
     pthread_create(&readTid, NULL, read_message, &chat);
 
@@ -705,7 +708,7 @@ int main()
     sem_init(&finish, 0, 0);
 
 
-    /* 打开主菜单文件 */
+    /* 打开主菜单文件 ---读文件 */
     int mainMenu = open("mainMenu", O_RDONLY);
     if (mainMenu == -1)
     {

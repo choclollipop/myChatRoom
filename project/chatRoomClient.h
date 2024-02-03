@@ -48,7 +48,10 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg);
 int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg);
 
 /* 从服务器读取好友列表 */
-int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg);
+int readFriends(int socketfd, message * Msg);
+
+/* 打印好友列表 */
+int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg);
 
 /* 创建群聊 */
 int chatRoomClientCreateGroupChat(int socketfd, message * Msg);

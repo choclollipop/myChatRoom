@@ -58,7 +58,7 @@ int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int *
 int chatRoomServerRegister(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg);
 
 /* 查看好友列表 */
-int chatRoomServerSearchFriends(chatRoom * chat);
+int chatRoomServerSearchFriends(chatRoom * chat,  message * Msg, char *** result, int * row, int * column, char ** errMsg);
 
 /* 添加好友 */
 int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * row, int * cloumn, char ** errMsg);

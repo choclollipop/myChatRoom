@@ -73,7 +73,7 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg);
 int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg);
 
 /* 拉人进群 */
-int chatRoomServerAddPeopleInGroup();
+int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg);
 
 int chatRoomStartCommunicate();
 

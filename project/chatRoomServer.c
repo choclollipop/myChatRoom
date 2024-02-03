@@ -50,6 +50,7 @@ enum STATUS_CODE
 };
 
 /* 聊天室功能选择 */
+/* 聊天室功能选择 */
 enum FUNC_CHOICE
 {
     F_FRIEND_VIEW = 1,
@@ -57,10 +58,10 @@ enum FUNC_CHOICE
     F_FRIEND_DELETE,
     F_PRIVATE_CHAT,
     F_CREATE_GROUP,
+    F_INVITE_GROUP,
     F_GROUP_CHAT,
     F_EXIT,
 };
-
 /* 前置声明 */
 /* 聊天室功能 */
 int chatRoomFunc(chatRoom * chat, message * Msg);
@@ -189,6 +190,27 @@ void sigHander(int sig)
 }
 
 #endif
+
+
+/* 拉人进群 */
+int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg)
+{
+    #if 1
+    int acceptfd = chat->communicateFd;
+    char sql[BUFFER_SQL];
+    bzero(sql, sizeof(sql));
+
+    sprintf(sql, "insert into groups values('%s' , '%s', '');", Msg->clientGroupName, Msg->requestClientName);
+    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
+    if (ret != SQLITE_OK)
+    {
+        printf("create table error:%s\n", (char *)*errMsg);
+        exit(-1);
+    }
+
+    return ON_SUCCESS;
+    #endif
+}
 
 /* 服务器登录 */
 int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errMsg)
@@ -456,7 +478,7 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
             //测试.............................................................................................
             printf("插入\n");
 
-            sprintf(sql, "insert into friend values('%s')", Msg->requestClientName);
+            sprintf(sql, "insert into %s values('%s')", Msg->clientLogInName, Msg->requestClientName);
             ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
             if (ret != SQLITE_OK)
             {
@@ -489,34 +511,13 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
     
 }
 
-/* 拉人进群 */
-int chatRoomServerAddPeopleInGroup()
-{
-    #if 0
-    
 
-    char sql[BUFFER_SQL];
-    bzero(sql, sizeof(sql));
-    char * errMsg = NULL;
-
-    sprintf(sql, "insert into groups values('%s' , '%s')", groupName, idBuffer);
-    int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
-    if (ret != SQLITE_OK)
-    {
-        printf("create table error:%s\n", errMsg);
-        exit(-1);
-    }
-
-    return ON_SUCCESS;
-    #endif
-}
 
 /* 创建群聊 */
 int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg)
 {
     int acceptfd = chat->communicateFd;
     ssize_t writeBytes = 0;
-
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
@@ -526,9 +527,8 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
     int ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("select * from groups:%s\n", *errMsg);
-        sqlite3_close(g_clientMsgDB);
-        exit(-1);
+        printf("select * from groups: %s\n", (char *)errMsg);
+        return 0;
     }
 
     if (*row < 0)
@@ -538,15 +538,17 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
     else if (*row == 0)
     {
         /* 如果没有创建群聊--加入到表格 */
-        sprintf(sql, "insert into groups values('%s', '%s')", Msg->clientGroupName, Msg->clientLogInName);
+        sprintf(sql, "insert into groups values('%s', '%s', '')", Msg->clientGroupName, Msg->clientLogInName);
+        printf("sql : %s\n", sql);
         int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
         if (ret != SQLITE_OK)
         {
             printf("insert into groups:%s\n", *errMsg);
         }
     }
+    
     bzero(Msg->message, sizeof(Msg->message));
-    strncpy(Msg->message, "创建群聊成功", sizeof(Msg->message) - 1);
+    strncpy(Msg->message, "创建群聊成功", sizeof(Msg->message));
     writeBytes = write(acceptfd, Msg, sizeof(struct message));
     if (writeBytes < 0)
     {
@@ -555,6 +557,7 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
     }
     return  ON_SUCCESS;
 }
+
 
 /* 发起群聊 */
 int chatRoomStartCommunicate()
@@ -845,7 +848,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     if (ret != SQLITE_OK)
     {
         perror("sqlite open error");
-        close(acceptfd);
         return ERROR;
     }
     /* 创建储存好友的表 */
@@ -855,7 +857,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     {
         printf("create table error:%s\n", errMsg);
         sqlite3_close(g_clientMsgDB);
-        close(acceptfd);
         return ERROR;
     }
     /* 创建群的表 */
@@ -863,9 +864,9 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errMsg);
     if (ret != SQLITE_OK)
     {
-        printf("create table error:%s\n", errMsg);
+        printf("create table groups error:%s\n", errMsg);
         sqlite3_close(g_clientMsgDB);
-        exit(-1);
+        return ERROR;
     }
 
     //测试
@@ -936,11 +937,12 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
          /* 创建群聊 */
         case F_CREATE_GROUP:
-
             chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
-
             break;
-
+            /* 群聊拉人 */
+        case F_INVITE_GROUP:
+            chatRoomServerAddPeopleInGroup(chat, Msg, &errMsg);
+            break;
         /* 发起群聊 */
         case F_GROUP_CHAT:
             chatRoomStartCommunicate();

@@ -53,14 +53,14 @@ int readFriends(int socketfd, message * Msg);
 /* 打印好友列表 */
 int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg);
 
-/* 创建群聊 */
-int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
-
 /* 私聊发送信息 */
 int chatRoomPrivateChat(message * Msg, int socketfd);
 
+/* 创建群聊 */
+int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
+
 /* 拉人进群 */
-int chatRoomClientAddPeopleInGroup();
+int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree);
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate();

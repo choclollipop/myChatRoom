@@ -48,6 +48,7 @@ enum FUNC_CHOICE
     F_FRIEND_DELETE,
     F_PRIVATE_CHAT,
     F_CREATE_GROUP,
+    F_INVITE_GROUP,
     F_GROUP_CHAT,
     F_EXIT,
 };
@@ -232,6 +233,8 @@ int readFriends(int socketfd, message * Msg)
     /* 只需要将msg里面的choice传过去就好 */
     ssize_t writeBytes = write(socketfd, Msg, sizeof(Msg));
     
+    sem_wait(&finish);
+
     return ON_SUCCESS;
 }
 
@@ -293,9 +296,7 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
         return ERROR;
     }
 
-    
-    // sem_wait(&finish);
-    printf("添加好友结束\n");
+    sem_wait(&finish);
 
     return ON_SUCCESS;
 }
@@ -305,14 +306,22 @@ int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
 {
     /* 创建群聊 */
     bzero(Msg->clientGroupName, sizeof(Msg->clientGroupName));
+
     char c = '0';
     ssize_t writeBytes = 0;
 
     printf("请输入你想要创建的群聊名称：\n");
+    // scanf("%s", nameBuffer);
     scanf("%s", Msg->clientGroupName);
+
     while ((c = getchar()) != EOF && c != '\n');
 
+    // strncpy(Msg->clientGroupName, nameBuffer, sizeof(nameBuffer));
+
     writeBytes = write(socketfd, Msg, sizeof(struct message));
+    printf("Msg->clientGroupName :  %s\n", Msg->clientGroupName);
+    
+
     if (writeBytes < 0)
     {
         perror("write error");
@@ -323,45 +332,47 @@ int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
        
 }
 
-/* 拉人进群 */
-int chatRoomClientAddPeopleInGroup()
+int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree)
 {
-#if 0
-
-    char idBuffer[DEFAULT_LOGIN_NAME];
-    bzero(idBuffer, sizeof(idBuffer));
-
+#if 1
+            
     char c = '0';
 
     printf("好友id:   \n");
-    scanf("%s", idBuffer);
+    memset(Msg->requestClientName, 0, sizeof(Msg->requestClientName));
+    scanf("%s", Msg->requestClientName);
     while ((c = getchar()) != EOF && c != '\n');
 
-    int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)idBuffer);
+    int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)Msg->requestClientName);
     if (ret == 0)
     {
         printf("没有该好友，请重新输入！");
-        bzero(idBuffer, sizeof(idBuffer));
-        scanf("%s", idBuffer);
+        bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
+        scanf("%s", Msg->requestClientName);
         while ((c = getchar()) != EOF && c != '\n');
     }
     else
     {
+        printf("请选择要拉的群聊名称==\n");
+        bzero(Msg->clientGroupName, sizeof(Msg->clientGroupName));
+        scanf("%s", Msg->clientGroupName);
         /* 将好友id发送到服务器 */
-        write(socketfd, idBuffer, sizeof(idBuffer));
+        write(socketfd, Msg, sizeof(struct message));
 
-        char chatReadBuffer[BUFFER_CHAT];
+        // char chatReadBuffer[BUFFER_CHAT];
 
-        bzero(chatReadBuffer, sizeof(chatReadBuffer));
-        read(socketfd, chatReadBuffer, sizeof(chatReadBuffer));
+        // bzero(chatReadBuffer, sizeof(chatReadBuffer));
+        // read(socketfd, chatReadBuffer, sizeof(chatReadBuffer));
 
-        if(strncmp(chatReadBuffer, "q", sizeof(chatReadBuffer)) == 0)
-        {
-            printf("添加成功！");
-        }
+        // if(strncmp(chatReadBuffer, "q", sizeof(chatReadBuffer)) == 0)
+        // {
+        //     printf("添加成功！");
+        // }
     }
 #endif
 }
+
+
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate()
@@ -454,6 +465,8 @@ void * read_message(void * arg)
             {
                 printf("其实不该有");
             }
+
+            sem_post(&finish);
             
             break;
         
@@ -469,10 +482,10 @@ void * read_message(void * arg)
             else
             {
                 printf("%s\n", Msg.message);
-                chatRoomClientAddFriends(socketfd, friendTree, &Msg);
+                // chatRoomClientAddFriends(socketfd, friendTree, &Msg);
             }
             
-            // sem_post(&finish);
+            sem_post(&finish);
 
             break;
         
@@ -654,7 +667,9 @@ int chatRoomFunc(int socketfd, message * Msg)
         case F_CREATE_GROUP:
             chatRoomClientCreateGroupChat(socketfd, Msg);
             break;
-
+        case F_INVITE_GROUP:
+            chatRoomClientAddPeopleInGroup(socketfd, Msg, friendTree);
+        break;
         /* 群聊 */
         case F_GROUP_CHAT:
 

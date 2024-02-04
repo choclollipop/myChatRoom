@@ -365,7 +365,7 @@ int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, me
 {
     balanceBinarySearchTreeInOrderTravel(friendTree);
 
-    bzero(Msg, sizeof(Msg->requestClientName));
+    bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
     printf("请输入你要删除的好友id:(输入q退出)\n");
     scanf("%s", Msg->requestClientName);
     if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
@@ -690,6 +690,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         return ERROR;
     }
 
+    /* 插入到好友树 */
     printFrientList(socketfd, friendTree, Msg, Msg->func_choice);
     Msg->func_choice = 0;
 

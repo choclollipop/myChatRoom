@@ -739,31 +739,32 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
 }
 
 /* 删除好友 */
-int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char * errmsg)
+int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errmsg)
 {
     int acceptfd = chat->communicateFd;
 
+    int ret =0;
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-    sprintf(sql, "select * from friend where id = '%s'", Msg->requestClientName);
-    int ret = 0;
+    printf("delete friend name:%s\n", Msg->requestClientName);
 
-    ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, &errmsg);
+    sprintf(sql, "select * from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
+    ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errmsg);
     if (ret != SQLITE_OK)
     {
-        printf("select friends error:%s\n", errmsg);
+        printf("select friends error in delete friend:%s\n", *errmsg);
         return ERROR;
     }
 
     if (row > 0)
     {
         bzero(sql, sizeof(sql));
-        sprintf(sql, "delete from friend where id = '%s'", Msg->requestClientName);
+        sprintf(sql, "delete from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
 
-        ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, &errmsg);
+        ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errmsg);
         if (ret != SQLITE_OK)
         {
-            printf("delete friends error:%s\n", errmsg);
+            printf("delete friends error in delete friend:%s\n", *errmsg);
             return ERROR;
         }
 
@@ -891,11 +892,16 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     }
 
     //测试.......
-    printf("功能界面\n");
+    
     while (1)
     {
+        printf("功能界面\n");
         /* 读取客户端功能函数发过来的Msg，根据其中的func_choice跳转到相应的函数中 */
         readBytes = read(acceptfd, Msg, sizeof(struct message));
+
+        //测试
+        printf("choice func :%d\n", Msg->func_choice);
+
         if (readBytes < 0)
         {
             perror("read error");
@@ -905,9 +911,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         {
             return ERROR;
         }
-
-        //测试.....
-        printf("func_choice:%d\n", Msg->func_choice);
 
         switch (Msg->func_choice)
         {
@@ -939,7 +942,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            ret = chatRoomDeleteFriens(chat, Msg, &result, &row, &column, errMsg);
+            ret = chatRoomDeleteFriens(chat, Msg, &result, &row, &column, &errMsg);
             if (ret != ON_SUCCESS)
             {
                 printf("delete friend error\n");

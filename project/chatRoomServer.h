@@ -64,7 +64,7 @@ int chatRoomServerSearchFriends(chatRoom * chat,  message * Msg, char *** result
 int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * row, int * cloumn, char ** errMsg);
 
 /* 删除好友 */
-int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char * errmsg);
+int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * row, int * column, char ** errmsg);
 
 /* 寻找目标用户套接字并发送消息 */
 int chatRoomChatMessage(chatRoom * chat, message * Msg);

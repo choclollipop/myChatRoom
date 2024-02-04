@@ -13,7 +13,7 @@ $(TARGET):$(OBJECT)
 	$(CC) -g $^ $(LIBS) $(LDFALGS) -o $@ -lsqlite3 -ljson-c
 
 %.o:%.c
-	gcc -c $^ -o $@
+	gcc -g -c $^ -o $@
 
 # 伪目标
 .PHONY:clean

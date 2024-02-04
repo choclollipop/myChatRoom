@@ -51,7 +51,7 @@ int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, me
 int readFriends(int socketfd, message * Msg);
 
 /* 打印好友列表 */
-int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg);
+int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg, int capacity);
 
 /* 私聊发送信息 */
 int chatRoomPrivateChat(message * Msg, int socketfd);

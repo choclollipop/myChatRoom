@@ -214,6 +214,8 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             {
                 printf("%s\n", Msg->message);
                 flag = 0;
+                /* 清屏 */
+                system("clear");
                 ret = chatRoomFunc(socketfd, Msg);
                 if (ret != ON_SUCCESS)
                 {
@@ -236,6 +238,8 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             {
                 printf("%s\n", Msg->message);
                 flag = 0;
+                /* 清屏 */
+                system("clear");
                 ret = chatRoomFunc(socketfd, Msg);
                 if (ret != ON_SUCCESS)
                 {

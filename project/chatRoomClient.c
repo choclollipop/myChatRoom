@@ -338,13 +338,14 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     printf("请输入你要添加的好友id(输入q退出):\n");
     scanf("%s", Msg->requestClientName);
     while ((c = getchar()) != EOF && c != '\n');
-    printf("zheli\n");
+
     if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
     {
+        /* 清屏 */
+        system("clear");
         return ON_SUCCESS;
     }
 
-    printf("zheli|n\n");
     /* 给添加的对象发送添加请求 */
     writeBytes = write(socketfd, Msg, sizeof(struct message));
     if (writeBytes < 0)
@@ -354,8 +355,6 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
     }
 
     sem_wait(&finish);
-
-    printf("这届\n");
 
     return ON_SUCCESS;
 }
@@ -380,6 +379,8 @@ int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, me
     {
         printf("客户端删除好友失败");
     }
+
+    sem_wait(&finish);
     
     return ON_SUCCESS;
 }
@@ -571,6 +572,7 @@ void * read_message(void * arg)
         
         /* 添加好友 */
         case F_FRIEND_INCREASE:
+            system("clear");
             if (!strncmp(Msg.message, "对方同意了您的请求", sizeof(Msg.message)))
             {
                 /* 同意请求,插入好友树 */
@@ -584,8 +586,9 @@ void * read_message(void * arg)
             }
             else
             {
+                /* 不在线，或其他情况，直接退出这个功能 */
                 printf("%s\n", Msg.message);
-                chatRoomClientAddFriends(socketfd, friendTree, &Msg);
+                // chatRoomClientAddFriends(socketfd, friendTree, &Msg);
             }
             
             sem_post(&finish);
@@ -602,6 +605,8 @@ void * read_message(void * arg)
             {
                 printf("删除好友成功\n");
             }
+
+            sem_post(&finish);
             break;
 
         /* 私聊 */
@@ -709,7 +714,15 @@ int chatRoomFunc(int socketfd, message * Msg)
         {
         /* 查看好友 */
         case F_FRIEND_VIEW:
-            balanceBinarySearchTreeInOrderTravel(friendTree);
+            system("clear");
+            if (!friendTree->size)
+            {
+                printf("暂时没有好友，去添加好友吧!\n");
+            }
+            else
+            {
+                balanceBinarySearchTreeInOrderTravel(friendTree);
+            }
             
             break;
 

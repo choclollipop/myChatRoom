@@ -34,6 +34,9 @@ sqlite3 * g_chatRoomDB = NULL;
 /* 创建一个客户端存放好友信息的数据库 */
 sqlite3 * g_clientMsgDB = NULL;
 
+/* 通信套接字 */
+int acceptfd = 0;
+
 /* 主界面选择 */
 enum CLIENT_CHOICE
 {
@@ -94,6 +97,15 @@ int printfFunc(void * val)
 
 }
 
+/* 客户端下线，关闭资源 */
+int destoryClientSource()
+{
+    close(acceptfd);
+    sqlite3_close(g_clientMsgDB);
+
+    return ON_SUCCESS;
+}
+
 /* 服务器的初始化 */
 int chatRoomServerInit(int socketfd)
 {
@@ -128,47 +140,16 @@ int chatRoomServerInit(int socketfd)
 
 }
 
-/* 读取客户端传输的登录名和密码 */
-void readName(int acceptfd, struct clientNode * client)
-{
-    ssize_t readBytes = read(acceptfd, client->loginName, sizeof(char) * DEFAULT_LOGIN_NAME);
-    if (readBytes < 0)
-    {
-        perror("read error");
-        close(acceptfd);
-        pthread_exit(NULL);
-    }
-
-    printf("登录名：%s\n", client->loginName);
-
-}
-
-#if 0
-/* 读取密码*/
-void readPasswd(int acceptfd, struct clientNode * client)
-{
-    // ssize_t readBytes = read(acceptfd, client->loginPawd, sizeof(char) * DEFAULT_LOGIN_PAWD);
-    // if (readBytes < 0)
-    // {
-    //     perror("read error");
-    //     close(acceptfd);
-    //     sqlite3_close(g_chatRoomDB);
-    //     pthread_exit(NULL);
-    // }
-
-    // printf("登录密码：%s\n", client->loginPawd);
-}
-#endif
-
 #if 0
 /* 捕捉信号关闭资源 */
 void sigHander(int sig)
 {
 
-    printf("hello world\n");
+    printf("客户端下线\n");
 
+    destoryClientSource();
     /* 进程结束 */
-    exit(1);
+    pthread_exit(NULL);
 }
 
 #endif
@@ -430,9 +411,6 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-
-    //测试...........................................................................................
-    printf("添加好友功能\n");
 
     printf("request.loginName:%s\n", Msg->requestClientName);
 
@@ -746,7 +724,6 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
     int ret =0;
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
-    printf("delete friend name:%s\n", Msg->requestClientName);
 
     sprintf(sql, "select * from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
     ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errmsg);
@@ -805,6 +782,14 @@ void * chatHander(void * arg)
         if (readBytes < 0)
         {
             perror("read error");
+            close(acceptfd);
+            pthread_exit(NULL);
+        }
+        else if (readBytes == 0)
+        {
+            /* 客户端下线 */
+            //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
+            printf("客户端下线\n");
             close(acceptfd);
             pthread_exit(NULL);
         }
@@ -890,14 +875,25 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         printf("create table groups error:%s\n", errMsg);
         return ERROR;
     }
-
-    //测试.......
     
     while (1)
     {
         printf("功能界面\n");
         /* 读取客户端功能函数发过来的Msg，根据其中的func_choice跳转到相应的函数中 */
         readBytes = read(acceptfd, Msg, sizeof(struct message));
+        if (readBytes < 0)
+        {
+            printf("main func error\n");
+            return ERROR;
+        }
+        else if (readBytes == 0)
+        {
+            //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
+            printf("客户端下线\n");
+            sqlite3_close(g_clientMsgDB);
+            close(acceptfd);
+            pthread_exit(NULL);
+        }
 
         //测试
         printf("choice func :%d\n", Msg->func_choice);
@@ -1058,8 +1054,6 @@ int main()
     chatRoom chat;
     bzero(&chat, sizeof(chat));
     chat.online = onlineList;
-        
-    int acceptfd = 0;
 
     /* 建立连接 */
     while (1)
@@ -1084,7 +1078,7 @@ int main()
     /* ctr + c */
     signal(SIGINT, sigHander);
     /* ctr + z */
-    // signal(SIGTSTP, sigHander);
+    signal(SIGTSTP, sigHander);
 
 #endif
 

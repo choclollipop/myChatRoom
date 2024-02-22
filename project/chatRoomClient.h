@@ -63,9 +63,12 @@ int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
 int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree);
 
 /* 发起群聊 */
-int chatRoomClientStartGroupCommunicate();
+int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg);
 
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, message * Msg);
+
+/* 添加好友 */
+int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg);
 
 #endif

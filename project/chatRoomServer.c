@@ -516,7 +516,8 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
 
     if (*row < 0)
     {
-        perror("get row error in groups");
+        printf("get row error in groups");
+        return ERROR;
     }
     else if (*row == 0)
     {
@@ -528,6 +529,19 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
         {
             printf("insert into groups:%s\n", *errMsg);
         }
+        return ERROR;
+    }
+    else if (*row > 0)
+    {
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "该群聊名称已存在，请重新输入", sizeof(Msg->message));
+        writeBytes = write(acceptfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write error");
+            return ERROR;
+        }
+        return ERROR;
     }
     
     bzero(Msg->message, sizeof(Msg->message));
@@ -538,16 +552,23 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
         perror("write error");
         return ERROR;
     }
+
     return  ON_SUCCESS;
 }
 
 /* 邀请好友进群 */
 int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg)
 {
-    #if 1
     int acceptfd = chat->communicateFd;
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
+
+    int readBytes = read(acceptfd, Msg, sizeof(struct message));
+    if (readBytes < 0)
+    {
+        perror("read error");
+        return ERROR;
+    }
 
     sprintf(sql, "insert into groups values('%s' , '%s', '');", Msg->clientGroupName, Msg->requestClientName);
     int ret = sqlite3_exec(g_clientMsgDB, sql, NULL, NULL, errMsg);
@@ -555,25 +576,20 @@ int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg
     {
         printf("create table error:%s\n", (char *)*errMsg);
         exit(-1);
-    }
-
+    } 
     return ON_SUCCESS;
-    #endif
 }
 
 /* 发起群聊 */
-int chatRoomStartCommunicate()
+int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int * row, int * column, char ** errMsg)
 {
-    #if 0
     int acceptfd = chat->communicateFd;
 
-    ssize_t readBytes = 0;
-    ssize_t writeBytes = 0;
+    int writeBytes = 0;
+    int readBytes = 0;
 
     char readBuffer[BUFFER_SIZE];
     bzero(readBuffer, sizeof(readBuffer));
-
-    int flag = 0;
 
     readBytes = read(acceptfd, readBuffer, sizeof(readBuffer));
     if (readBytes < 0)
@@ -601,57 +617,49 @@ int chatRoomStartCommunicate()
         /* 储存sql语句 */
         char sql[BUFFER_SQL];
         bzero(sql, sizeof(sql));
-        /* 存储查询结果 */
-        char ** result = NULL;
-        int row = 0;
-        int column = 0;
-
-        char * errMsg = NULL;
 
         sprintf(sql, "select id from groups where groupName = '%s'", groupNameVal);
-        int ret = sqlite3_get_table(g_clientMsgDB, sql, &result, &row, &column, &errMsg);
+        int ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errMsg);
         if (ret != SQLITE_OK)
         {
-            printf("create table error:%s\n", errMsg);
+            printf("select groupName error: %s\n", *errMsg);
             sqlite3_close(g_clientMsgDB);
             exit(-1);
         }
 
-        if (row < 0)
+        if (*row < 0)
         {
-            perror("get row error");
-            sqlite3_close(g_clientMsgDB);
+            perror("get groupName error");
             exit(-1);
         }
-        else if (row == 0)
+        else if (*row == 0)
         {
-            write(acceptfd, &flag, sizeof(int));
-            sqlite3_close(g_clientMsgDB);
+            writeBytes = write(acceptfd, "不存在该群聊！请重新输入：", sizeof("不存在该群聊！请重新输入："));
+            if (writeBytes < 0)
+            {
+                perror("write start  error");
+                return ERROR;
+            }
             exit(-1);
         }
         else
         {
-            while (1)
+            while (*row)
             {
-                for (int idx  = 0; idx <= row; idx++)
+                for (int idx  = 0; idx <= (*row); idx++)
                 {
-                    for (int jdx = 0; jdx < column; jdx++)
+                    for (int jdx = 0; jdx < (*column); jdx++)
                     {
-                        if (strcmp(requestClient->loginName, result[idx * row + jdx]) == 0)
-                        
-                            acceptfd =  requestClient->communicateFd;
-                        }
-                        /* to do.. 私聊接口 */
+                        strncpy(Msg->requestClientName, (const char *)result[idx * (*row) + jdx], sizeof(result[idx * (*row) + jdx]));
+                        chatRoomChatMessage(chat, Msg);
                     }
-
                 }
-
+                (*row)--;
             }
-
         }
-        #endif
-
     }
+    return ON_SUCCESS;
+}
 
 /* 寻找目标用户套接字并发送消息 */
 int chatRoomChatMessage(chatRoom * chat, message * Msg)
@@ -733,7 +741,7 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
         return ERROR;
     }
 
-    if (row > 0)
+    if (*row > 0)
     {
         bzero(sql, sizeof(sql));
         sprintf(sql, "delete from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
@@ -744,7 +752,6 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
             printf("delete friends error in delete friend:%s\n", *errmsg);
             return ERROR;
         }
-
     }
     else
     {
@@ -971,7 +978,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             break;
         /* 发起群聊 */
         case F_GROUP_CHAT:
-            chatRoomStartCommunicate();
+            chatRoomStartCommunicate(chat, Msg , &result, &row, &column, &errMsg);
             break;
         
         default:
@@ -988,7 +995,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
     return ON_SUCCESS;
 }
-
  
 int main()
 {

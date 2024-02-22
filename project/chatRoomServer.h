@@ -1,6 +1,7 @@
 #ifndef __CHAT_ROOM_SERVER_H_
 #define __CHAT_ROOM_SERVER_H_
 #include "common.h"
+#include "balanceBinarySearchTree.h"
 #include <pthread.h>
 
 
@@ -75,6 +76,6 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
 /* 邀请好友进群 */
 int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg);
 
-int chatRoomStartCommunicate();
+int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int * row, int * column, char ** errMsg);
 
 #endif

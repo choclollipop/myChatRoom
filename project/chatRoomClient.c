@@ -17,9 +17,10 @@
 #include <json-c/json.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define SERVER_PORT     8080
-#define SERVER_ADDR     "172.31.173.216"
+#define SERVER_ADDR     "172.28.25.146"
 #define BUFFER_SIZE     300
 #define BUFFER_SQL      100   
 #define DEFAULT_CHAT    450
@@ -406,22 +407,24 @@ int chatRoomPrivateChat(message * Msg, int socketfd)
     return ON_SUCCESS;
 }
 
+
 /* 创建群聊 */
 int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
 {
     /* 创建群聊 */
     bzero(Msg->clientGroupName, sizeof(Msg->clientGroupName));
 
-    char c = '0';
     ssize_t writeBytes = 0;
 
     printf("请输入你想要创建的群聊名称：\n");
-    // scanf("%s", nameBuffer);
-    scanf("%s", Msg->clientGroupName);
-
-    while ((c = getchar()) != EOF && c != '\n');
-
-    // strncpy(Msg->clientGroupName, nameBuffer, sizeof(nameBuffer));
+    //换成fgets避免输入群名过长导致溢出
+    if (fgets(Msg->clientGroupName, sizeof(Msg->clientGroupName), stdin) == NULL)
+    {
+        perror("fgets error");
+        return ERROR;
+    }
+    //去除末行的换行符
+    Msg->clientGroupName[strcspn(Msg->clientGroupName, "\n")] = '\0';
 
     writeBytes = write(socketfd, Msg, sizeof(struct message));
     printf("Msg->clientGroupName :  %s\n", Msg->clientGroupName);
@@ -440,8 +443,6 @@ int chatRoomClientCreateGroupChat(int socketfd, message * Msg)
 /* 邀请好友进群 */
 int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySearchTree * friendTree)
 {
-#if 1
-            
     char c = '0';
 
     printf("好友id:   \n");
@@ -449,48 +450,48 @@ int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySea
     scanf("%s", Msg->requestClientName);
     while ((c = getchar()) != EOF && c != '\n');
 
-    int ret = balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)Msg->requestClientName);
-    if (ret == 0)
+    bool friendFound = false;
+    while (!friendFound)
     {
-        printf("没有该好友，请重新输入！");
-        bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
-        scanf("%s", Msg->requestClientName);
-        while ((c = getchar()) != EOF && c != '\n');
+        if (balanceBinarySearchTreeIsContainAppointVal(friendTree, (void *)Msg->requestClientName))
+        {
+            printf("请选择要拉的群聊名称:\n");
+            bzero(Msg->clientGroupName, sizeof(Msg->clientGroupName));
+            scanf("%s", Msg->clientGroupName);
+            /* 将好友id发送到服务器 */
+            write(socketfd, Msg, sizeof(struct message));
+            friendFound = true;
+        }
+        else
+        {
+            printf("没有该好友，请重新输入！(输入q结束)\n");
+            printf("好友id:   \n");
+
+            if (!strncmp(Msg->requestClientName, "q", sizeof(Msg->requestClientName)))
+            {
+                /* 清屏 */
+                // system("clear");
+                return ON_SUCCESS;
+            }
+
+            memset(Msg->requestClientName, 0, sizeof(Msg->requestClientName));
+            scanf("%s", Msg->requestClientName);
+            while ((c = getchar()) != EOF && c != '\n');
+        }
     }
-    else
-    {
-        printf("请选择要拉的群聊名称==\n");
-        bzero(Msg->clientGroupName, sizeof(Msg->clientGroupName));
-        scanf("%s", Msg->clientGroupName);
-        /* 将好友id发送到服务器 */
-        write(socketfd, Msg, sizeof(struct message));
 
-        // char chatReadBuffer[BUFFER_CHAT];
-
-        // bzero(chatReadBuffer, sizeof(chatReadBuffer));
-        // read(socketfd, chatReadBuffer, sizeof(chatReadBuffer));
-
-        // if(strncmp(chatReadBuffer, "q", sizeof(chatReadBuffer)) == 0)
-        // {
-        //     printf("添加成功！");
-        // }
-    }
-#endif
+    return ON_SUCCESS;
 }
 
 /* 发起群聊 */
-int chatRoomClientStartGroupCommunicate()
+int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
 {
-#if 0
     int c = '0';
-    ssize_t readBytes = 0;
 
     char writeBuffer[DEFAULT_LOGIN_NAME];
     bzero(writeBuffer, sizeof(writeBuffer));
 
-    char readBuffer[DEFAULT_LOGIN_NAME];
-    bzero(readBuffer, sizeof(readBuffer));
-
+    /* 关于群聊的记录 */
     struct json_object * groupHistory = json_object_new_object();
 
     printf("发起群聊的名称:   \n");
@@ -499,32 +500,23 @@ int chatRoomClientStartGroupCommunicate()
 
     struct json_object * groupNameVal = json_object_new_string(writeBuffer);
     json_object_object_add(groupHistory, "groupName", groupNameVal);
-    struct json_object * id = json_object_new_string(client->loginName);
+    struct json_object * id = json_object_new_string(Msg->clientLogInName);
     json_object_object_add(groupHistory, "id", id);
 
     bzero(writeBuffer, sizeof(writeBuffer));
     printf("发送:   \n");
     scanf("%s", writeBuffer);
     while ((c = getchar()) != EOF && c != '\n');
+
     struct json_object * historyVal = json_object_new_string(writeBuffer);
     json_object_object_add(groupHistory, "history", historyVal);
 
     const char * groupHistoryVal = json_object_to_json_string(groupHistory);
     write(socketfd, groupHistoryVal, strlen(groupHistoryVal));
 
-    readBytes = read(socketfd, readBuffer, sizeof(readBuffer));
-    if (readBytes <= 0)
-    {
-        perror("read error");
-        exit(-1);
-    }
-    else
-    {
-        printf("read : %s\n", readBuffer);
-    }
-      
-#endif
+    return ON_SUCCESS;
 }
+
 
 /* 功能界面接收消息 */
 void * read_message(void * arg)

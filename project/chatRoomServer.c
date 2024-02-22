@@ -740,8 +740,6 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
-    printf("MSG:%s\n", Msg->requestClientName);
-
     sprintf(sql, "select * from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
     ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errmsg);
     if (ret != SQLITE_OK)
@@ -749,8 +747,6 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
         printf("select friends error in delete friend:%s\n", *errmsg);
         return ERROR;
     }
-
-    printf("row:%d\n", *row);
 
     if (*row > 0)
     {

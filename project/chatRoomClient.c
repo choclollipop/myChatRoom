@@ -99,15 +99,16 @@ int compareFunc(void * val1, void * val2)
     char * client = (char *)val1;
     char * data = (char *)val2;
 
-    if (client > data)
+    int ret = strncmp(client, data, sizeof(char) * DEFAULT_LOGIN_NAME);
+
+    if (ret > 0)
     {
         return 1;
     }
-    else if (client < data)
+    else if (ret < 0)
     {
         return -1;
     }
-
 
     return 0;
 }
@@ -609,11 +610,11 @@ void * read_message(void * arg)
         case F_FRIEND_DELETE:
             if (!strncmp(Msg.message, "未找到该好友，请检查是否输入正确", sizeof(Msg.message)))
             {
-                chatRoomDeleteFriends(socketfd, friendTree, &Msg);
+                printf("%s\n", Msg.message);
             }
             else
             {
-                printf("删除好友成功\n");
+                printf("%s\n", Msg.message);
             }
 
             sem_post(&finish);

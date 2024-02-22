@@ -20,7 +20,7 @@
 #include <stdbool.h>
 
 #define SERVER_PORT     8080
-#define SERVER_ADDR     "172.28.25.146"
+#define SERVER_ADDR     "172.30.149.120"
 #define BUFFER_SIZE     300
 #define BUFFER_SQL      100   
 #define DEFAULT_CHAT    450
@@ -363,6 +363,7 @@ int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree
 /* 删除好友 */
 int chatRoomDeleteFriends(int socketfd, BalanceBinarySearchTree * friendTree, message * Msg)
 {
+    printf("当前好友列表如下：\n");
     balanceBinarySearchTreeInOrderTravel(friendTree);
 
     bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
@@ -391,13 +392,18 @@ int chatRoomPrivateChat(message * Msg, int socketfd)
 {
     char c = '0';
 
+    signal(SIGINT, SIG_IGN);
+
     while (1)
     {
+        bzero(Msg->message, sizeof(Msg->message));
         scanf("%s", Msg->message);
         while ((c = getchar()) != EOF && c != '\n');
+
         if(!strncmp(Msg->message, "q", sizeof(Msg->message)))
         {
             write(socketfd, Msg, sizeof(struct message));
+            sem_post(&finish);
             return ON_SUCCESS;
         }
 
@@ -518,6 +524,20 @@ int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
 }
 
 
+/* 私聊发送信息线程 */
+void * sendMsg(void * arg)
+{
+    /* 线程分离 */
+    pthread_detach(pthread_self());
+
+    message * Msg = (message *)arg;
+
+    /* 在线发起私聊 */
+    chatRoomPrivateChat(Msg, socketfd);
+
+    pthread_exit(NULL);
+}
+
 /* 功能界面接收消息 */
 void * read_message(void * arg)
 {
@@ -552,8 +572,6 @@ void * read_message(void * arg)
             kill(getpid(), SIGINT);
             pthread_exit(NULL);
         }
-        //测试...............................................
-        printf("Msg.message:%s\n", Msg.message);
 
         switch (Msg.func_choice)
         {
@@ -603,11 +621,18 @@ void * read_message(void * arg)
 
         /* 私聊 */
         case F_PRIVATE_CHAT:
-
+            pthread_t send;
             if (!strncmp(Msg.message, "对方在线，可以输入要传送的消息", sizeof(Msg.message)))
             {
-                /* 在线发起私聊 */
-                chatRoomPrivateChat(&Msg, socketfd);
+                printf("%s\n", Msg.message);
+
+                /* 开辟线程发送信息 */
+                pthread_create(&send, NULL, sendMsg, &Msg);
+            }
+            else if (!strncmp(Msg.message, "对方不在线，请稍后再试", sizeof(Msg.message)))
+            {
+                printf("%s\n", Msg.message);
+                sem_post(&finish);
             }
             else
             {
@@ -641,6 +666,7 @@ void * read_message(void * arg)
         }
     }
 
+    pthread_exit(NULL);
 }
 
 /* 聊天室功能 */
@@ -738,6 +764,8 @@ int chatRoomFunc(int socketfd, message * Msg)
 
             write(socketfd, Msg, sizeof(struct message));
 
+            sem_wait(&finish);
+
             break;
 
         /* 创建群聊 */
@@ -759,7 +787,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         if (Msg->func_choice == F_EXIT)
         {
             write(socketfd, Msg, sizeof(struct message));
-            return ON_SUCCESS;
+            destorySorce();
         }
 
     }
@@ -804,6 +832,7 @@ int main()
     bzero(mainMenuBuffer, sizeof(mainMenuBuffer));
     read(mainMenu, mainMenuBuffer, sizeof(mainMenuBuffer) - 1);
 
+
     /* 新建消息结构体 */
     message Msg;
     bzero(&Msg, sizeof(Msg));
@@ -812,6 +841,7 @@ int main()
 
     ssize_t writeBytes = 0;
     char c = '0';
+
 
     /* 开始执行功能 */
     while (1)

@@ -100,7 +100,7 @@ int printfFunc(void * val)
 /* 客户端下线，关闭资源 */
 int destoryClientSource()
 {
-    close(acceptfd);
+    // close(acceptfd);
     sqlite3_close(g_clientMsgDB);
 
     return ON_SUCCESS;
@@ -670,6 +670,7 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
     BalanceBinarySearchTree * onlineList = chat->online;
 
     AVLTreeNode * onlineNode = NULL;
+    ssize_t readBytes = 0;
 
     clientNode client;
     bzero(client.loginName, sizeof(client.loginName));
@@ -678,12 +679,11 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
 
     if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
     {
+        /* 该用户在线 */
         AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&client);
         if (onlineNode == NULL)
         {
             perror("get node error");
-            close(acceptfd);
-            sqlite3_close(g_clientMsgDB);
             return ERROR;
         }
 
@@ -698,7 +698,13 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
 
         while (1)
         {
-            read(acceptfd, Msg, sizeof(struct message));
+            readBytes = read(acceptfd, Msg, sizeof(struct message));
+            if (readBytes < 0)
+            {
+                printf("error read\n");
+                return ERROR;
+            }
+
             if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
             {
                 bzero(Msg->message, sizeof(Msg->message));
@@ -712,13 +718,14 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
             strncpy(buffer, Msg->message, sizeof(buffer) - 1);
             sprintf(Msg->message, "[%s]:%s", Msg->clientLogInName, buffer);
             write(requestfd, Msg, sizeof(struct message));
-        }
-        
-        
+        }    
     }
     else
     {
-        write(acceptfd, "对方不在线，请给他留言(输出q退出)", sizeof("对方不在线，请给他留言(输出q退出)"));
+        /* 用户不在线 */
+        bzero(Msg->message, sizeof(struct message));
+        strncpy(Msg->message, "对方不在线，请稍后再试", sizeof(Msg->message));
+        write(acceptfd, Msg, sizeof(struct message));
     }
 
     return ON_SUCCESS;
@@ -733,6 +740,8 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
+    printf("MSG:%s\n", Msg->requestClientName);
+
     sprintf(sql, "select * from %s where id = '%s'", Msg->clientLogInName, Msg->requestClientName);
     ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errmsg);
     if (ret != SQLITE_OK)
@@ -740,6 +749,8 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
         printf("select friends error in delete friend:%s\n", *errmsg);
         return ERROR;
     }
+
+    printf("row:%d\n", *row);
 
     if (*row > 0)
     {
@@ -752,6 +763,11 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
             printf("delete friends error in delete friend:%s\n", *errmsg);
             return ERROR;
         }
+
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "删除好友成功", sizeof("删除好友成功"));
+        write(acceptfd, Msg, sizeof(struct message));
+
     }
     else
     {
@@ -810,6 +826,7 @@ void * chatHander(void * arg)
             {
                 perror("LOGIN ERROR");
                 close(acceptfd);
+                printf("关闭套接字错误\n");
                 pthread_exit(NULL);
             }
             break;
@@ -821,6 +838,7 @@ void * chatHander(void * arg)
             {
                 perror("LOGIN ERROR");
                 close(acceptfd);
+                printf("关闭套接字错误\n");
                 pthread_exit(NULL);
             }
             break;
@@ -902,18 +920,8 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             pthread_exit(NULL);
         }
 
-        //测试
+        //测试.................................................................................................
         printf("choice func :%d\n", Msg->func_choice);
-
-        if (readBytes < 0)
-        {
-            perror("read error");
-            return ON_SUCCESS;
-        }
-        if (readBytes == 0)
-        {
-            return ERROR;
-        }
 
         switch (Msg->func_choice)
         {
@@ -954,8 +962,9 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
             break;
 
+        /* 私聊 */
         case F_PRIVATE_CHAT:
-
+            //测试...........................................................................................
             /* 打印在线列表 */
             balanceBinarySearchTreeInOrderTravel(onlineList);
 
@@ -963,7 +972,8 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             if (ret != ON_SUCCESS)
             {
                 printf("private chat error\n");
-                break;
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
             }
 
             break;
@@ -987,8 +997,11 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
         if (Msg->func_choice == F_EXIT)
         {
+            //测试......................................................................................
+            printf("客户端下线\n");
+            sqlite3_close(g_clientMsgDB);
             close(acceptfd);
-            return ON_SUCCESS;
+            pthread_exit(NULL);
         }
 
     }

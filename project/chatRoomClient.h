@@ -56,6 +56,9 @@ int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message 
 /* 私聊发送信息 */
 int chatRoomPrivateChat(message * Msg, int socketfd);
 
+/* 私聊发送信息线程 */
+void * sendMsg(void * arg);
+
 /* 创建群聊 */
 int chatRoomClientCreateGroupChat(int socketfd, message * Msg);
 
@@ -64,6 +67,9 @@ int chatRoomClientAddPeopleInGroup(int socketfd, message * Msg, BalanceBinarySea
 
 /* 发起群聊 */
 int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg);
+
+/* 群聊发送信息线程 */
+void * sendGroupMsg(void * arg);
 
 /* 聊天室功能 */
 int chatRoomFunc(int socketfd, message * Msg);

@@ -787,7 +787,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         {
             write(socketfd, Msg, sizeof(struct message));
             destorySorce();
-            exit(0);
+            break;
         }
 
     }

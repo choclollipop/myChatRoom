@@ -704,8 +704,10 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
             char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DIFF];
             bzero(buffer, sizeof(buffer));
 
+            strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
+            strncpy(Msg->clientLogInName, client.loginName, sizeof(Msg->clientLogInName));
             strncpy(buffer, Msg->message, sizeof(buffer) - 1);
-            sprintf(Msg->message, "[%s]:%s", Msg->clientLogInName, buffer);
+            sprintf(Msg->message, "[%s]:%s", Msg->requestClientName, buffer);
             write(requestfd, Msg, sizeof(struct message));
         }    
     }
@@ -833,9 +835,10 @@ void * chatHander(void * arg)
 
         /* 退出程序 */
         if (Msg.choice == EXIT)
-        { 
+        {
+            printf("客户端下线\n");
             close(acceptfd);
-            pthread_exit(NULL);
+            break;
         }
     }
 
@@ -977,11 +980,8 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
         if (Msg->func_choice == F_EXIT)
         {
-            //测试......................................................................................
-            printf("客户端下线\n");
             sqlite3_close(g_clientMsgDB);
-            close(acceptfd);
-            pthread_exit(NULL);
+            break;
         }
 
     }

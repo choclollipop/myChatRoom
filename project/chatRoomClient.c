@@ -70,6 +70,7 @@ enum STATUS_CODE
 
 /* 前置声明 */
 int chatRoomFunc(int socketfd, message * Msg);
+void sighander(int sig);
 
 /* 销毁资源 */
 int destorySorce()
@@ -496,23 +497,16 @@ int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
 {
     char c = '0';
 
-    signal(SIGINT, SIG_IGN);
-
     while (1)
     {
-        char writeBuffer[BUFFER_CHAT - 2 * DEFAULT_LOGIN_NAME];
-        bzero(writeBuffer, sizeof(writeBuffer));
-        
-        printf("请输入发送的消息:   \n");
-        scanf("%s",writeBuffer);
+        // char writeBuffer[BUFFER_CHAT - 2 * DEFAULT_LOGIN_NAME];
+        // bzero(writeBuffer, sizeof(writeBuffer));
+        /* 清空原来的内容 */
+        bzero(Msg->message, sizeof(Msg->message));
+        // printf("请输入发送的消息:   \n");
+        scanf("%s", Msg->message);
         while ((c = getchar()) != EOF && c != '\n');
 
-        bzero(Msg->message, sizeof(Msg->message));
-        printf("输入前的信息：%s\n", Msg->message);
- 
-        strncpy(Msg->message, writeBuffer, sizeof(Msg->message));
-
-        printf("输入后的信息：%s\n", Msg->message);
         if(!strncmp(Msg->message, "q", sizeof(Msg->message)))
         {
             write(socketfd, Msg, sizeof(struct message));
@@ -520,7 +514,7 @@ int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
             return ON_SUCCESS;
         }
 
-        snprintf(Msg->message, DEFAULT_CHAT, "群聊消息：%s\n [%s]:%s\n", Msg->clientGroupName, Msg->clientLogInName,  writeBuffer);
+        // snprintf(Msg->message, DEFAULT_CHAT, "群聊消息：%s\n [%s]:%s\n", Msg->clientGroupName, Msg->clientLogInName,  writeBuffer);
         printf("线程中的messag:%s\n", Msg->message);
 
         write(socketfd, Msg, sizeof(struct message));
@@ -551,6 +545,8 @@ void * sendGroupMsg(void * arg)
     pthread_detach(pthread_self());
 
     message * Msg = (message *)arg;
+
+    signal(SIGINT, SIG_IGN);
 
     /* 在线发起群聊 */
     chatRoomClientStartGroupCommunicate(socketfd, Msg);

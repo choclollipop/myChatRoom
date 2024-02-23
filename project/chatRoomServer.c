@@ -62,7 +62,6 @@ enum FUNC_CHOICE
     F_CREATE_GROUP,
     F_INVITE_GROUP,
     F_GROUP_CHAT,
-    F_VERIFICATION,
     F_EXIT,
 };
 
@@ -616,15 +615,17 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
     /* 储存sql语句 */
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
+
+    char copy[DEFAULT_CHAT];
+    bzero(copy, sizeof(copy));
+
     /* 根据群名获得群内所有的id */
-    sprintf(sql, "select id from groups where groupName = '%s'", Msg->clientGroupName);
-    printf("sql:%s\n",sql);
+    sprintf(sql, "select id from groups where groupName = '%s' and id != '%s'", Msg->clientGroupName, Msg->clientLogInName);
     int ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
     {
         printf("select id in group error: %s\n", *errMsg);
     }
-    printf("get groups id:%d\n", *row);
 
     if (*row < 0)
     {
@@ -633,6 +634,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
     }
     else if (*row == 0)
     {
+        strncpy(Msg->message, "不存在该群聊！请重新输入：", sizeof(Msg->message));
         writeBytes = write(acceptfd, "不存在该群聊！请重新输入：", sizeof("不存在该群聊！请重新输入："));
         if (writeBytes < 0)
         {
@@ -647,6 +649,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
         strncpy(Msg->message, "发起群聊", sizeof(Msg->message));
         /* 发送提示信息 */
         write(acceptfd, Msg, sizeof(struct message));
+
         /* 循环读 */
         while (1)
         {
@@ -656,54 +659,78 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
                 printf("error read\n");
                 return ERROR;
             }
-            printf("发起群聊再读login:%s\n", Msg->clientLogInName);
-            printf("发起群聊再读request:%s\n", Msg->requestClientName);
-            printf("发起群聊再读message:%s\n", Msg->message);
+
+            strncpy(copy, Msg->message, sizeof(copy));
 
             /* 读完我先要找到群成员id并发送 */
             /*  */
             for (int idx = 0; idx <=(*row); idx++) 
             {
-                for (int jdx = 0; jdx < (*column); jdx++)
+                
+                strncpy(Msg->requestClientName, (const char *)(result[0])[idx], sizeof(Msg->requestClientName)); 
+                printf("id找到resName:%s\n", Msg->requestClientName); 
+                /* 判断在不在线 */
+                /* 在线列表 */
+                BalanceBinarySearchTree * onlineList = chat->online;
+
+                AVLTreeNode * onlineNode = NULL;
+            
+                clientNode client;
+                bzero(client.loginName, sizeof(client.loginName));
+                strncpy(client.loginName, Msg->requestClientName, sizeof(client.loginName));
+
+                /* 查看群成员是否在线 */
+                if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
+                {
+                    /* 该用户在线 */
+                    AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&client);
+                    if (onlineNode == NULL)
                     {
-                        strncpy(Msg->requestClientName, (const char *)(result[0])[idx], sizeof(Msg->requestClientName)); 
-                        printf("id找到resName:%s\n", Msg->requestClientName); 
-                        /* 判断在不在线 */
-                        /* 在线列表 */
-                        BalanceBinarySearchTree * onlineList = chat->online;
+                        perror("get node error");
+                        return ERROR;
+                    }
 
-                        AVLTreeNode * onlineNode = NULL;
+                    client = *(clientNode *)onlineNode->data;
+                    /* 请求通信对象的通信句柄 */
+                    int requestfd = client.communicateFd;
+#if 1
+                    /* 找到一个套接字就发送 */
+                    if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
+                    {
+                        bzero(Msg->message, sizeof(Msg->message));
+                        strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
+                        // write(requestfd, Msg, sizeof(struct message));
+                        return ON_SUCCESS;
+                    }
+#endif                  
                     
-                        clientNode client;
-                        bzero(client.loginName, sizeof(client.loginName));
-                        strncpy(client.loginName, Msg->requestClientName, sizeof(client.loginName));
+                    /* 修改发送的格式 */
+                    char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DEFAULT_GROUP_NAME - DIFF];
+                    bzero(buffer, sizeof(buffer));
 
-                        /* 查看群成员是否在线 */
-                        if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
-                        {
-                            /* 该用户在线 */
-                            AVLTreeNode * onlineNode = baseAppointValGetAVLTreeNode(onlineList, (void *)&client);
-                            if (onlineNode == NULL)
-                            {
-                                perror("get node error");
-                                return ERROR;
-                            }
+                    strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
+                    strncpy(Msg->clientLogInName, client.loginName, sizeof(Msg->clientLogInName));
+                    
+                    printf("buffer:%s\n", buffer);
+                    printf("message:%s\n", Msg->message);
 
-                            client = *(clientNode *)onlineNode->data;
-                            /* 请求通信对象的通信句柄 */
-                            int requestfd = client.communicateFd;
+                    strncpy(buffer, copy, sizeof(buffer) - 1);
 
-                            /* 找到一个套接字就发送 */
-                            if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
-                            {
-                                bzero(Msg->message, sizeof(Msg->message));
-                                strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
-                                write(requestfd, Msg, sizeof(struct message));
-                                return ON_SUCCESS;
-                            }
-                            /* 给群成员发送信息 */
-                            write(requestfd, Msg, sizeof(struct message));
-                        }
+                    printf("buffer1:%s\n", buffer);
+                    printf("message1:%s\n", Msg->message);
+                    
+                    bzero(Msg->message, sizeof(Msg->message));
+
+                    printf("message2:%s\n", Msg->message);
+                    /* 存放新的内容 */
+                    sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->requestClientName, buffer);
+                    
+                    printf("接收：%s\n", Msg->message);
+
+                    /* 给群成员发送信息 */
+                    write(requestfd, Msg, sizeof(struct message));
+        
+            
                     }
             }
            
@@ -833,7 +860,7 @@ void * chatHander(void * arg)
 {
     pthread_detach(pthread_self());
     chatRoom chat = *(chatRoom *)arg;
-    int acceptfd = chat.communicateFd;
+    int clientfd = chat.communicateFd;
 
     char ** result = NULL;
     int row = 0;
@@ -850,11 +877,11 @@ void * chatHander(void * arg)
 
     while (1)
     {
-        readBytes = read(acceptfd, &Msg, sizeof(struct message));
+        readBytes = read(clientfd, &Msg, sizeof(struct message));
         if (readBytes < 0)
         {
             perror("read error");
-            close(acceptfd);
+            close(clientfd);
             pthread_exit(NULL);
         }
         else if (readBytes == 0)
@@ -862,11 +889,11 @@ void * chatHander(void * arg)
             /* 客户端下线 */
             //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
             printf("客户端下线\n");
-            close(acceptfd);
+            close(clientfd);
             pthread_exit(NULL);
         }
 
-        printf("accept:%d", acceptfd);
+        printf("accept:%d", clientfd);
         switch (Msg.choice)
         {
         case LOG_IN:
@@ -874,7 +901,7 @@ void * chatHander(void * arg)
             if (ret != ON_SUCCESS)
             {
                 perror("LOGIN ERROR");
-                close(acceptfd);
+                close(clientfd);
                 printf("关闭套接字错误\n");
                 pthread_exit(NULL);
             }
@@ -886,7 +913,7 @@ void * chatHander(void * arg)
             if (ret != ON_SUCCESS)
             {
                 perror("LOGIN ERROR");
-                close(acceptfd);
+                close(clientfd);
                 printf("关闭套接字错误\n");
                 pthread_exit(NULL);
             }
@@ -900,12 +927,13 @@ void * chatHander(void * arg)
         if (Msg.choice == EXIT)
         {
             printf("客户端下线\n");
-            close(acceptfd);
+            close(clientfd);
+            // pthread_exit(NULL);
             break;
         }
     }
 
-    pthread_exit(NULL);
+    pthread_cancel(pthread_self());
 }
 
 /* 聊天室功能 */
@@ -970,6 +998,14 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             sqlite3_close(g_clientMsgDB);
             close(acceptfd);
             pthread_exit(NULL);
+        }
+
+        /* 退出 */
+        if (Msg->func_choice == F_EXIT)
+        {
+            printf("退出\n");
+            sqlite3_close(g_clientMsgDB);
+            return ON_SUCCESS;
         }
 
         switch (Msg->func_choice)
@@ -1038,12 +1074,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             break;
         
         default:
-            break;
-        }
-
-        if (Msg->func_choice == F_EXIT)
-        {
-            sqlite3_close(g_clientMsgDB);
             break;
         }
 

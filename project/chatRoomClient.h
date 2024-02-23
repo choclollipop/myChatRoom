@@ -23,7 +23,7 @@ typedef struct message
     int choice;
     /* 功能界面选择 */
     int func_choice;
-      /* 客户内容 */
+    /* 客户内容 */
     char clientLogInName[DEFAULT_LOGIN_NAME];
     char clientLogInPasswd[DEFAULT_LOGIN_PAWD];
     /* 群聊名称 */

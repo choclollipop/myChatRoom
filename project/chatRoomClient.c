@@ -328,13 +328,11 @@ int printFrientList(int socketfd, BalanceBinarySearchTree * friendTree, message 
 /* 添加好友 */
 int chatRoomClientAddFriends(int socketfd,  BalanceBinarySearchTree * friendTree, message * Msg)
 {
-
     bzero(Msg->requestClientName, sizeof(Msg->requestClientName));
+    bzero(Msg->message, sizeof(Msg->message));
 
     int choice = 0;
     char c = '0';
-
-
     ssize_t writeBytes = 0;
 
     printf("请输入你要添加的好友id(输入q退出):\n");
@@ -590,16 +588,16 @@ void * read_message(void * arg)
                 balanceBinarySearchTreeInsert(friendTree, Msg.requestClientName);
                 /* 测试......................................................................................... */
                 balanceBinarySearchTreeInOrderTravel(friendTree);
-            }
+            }  
             else if (!strncmp(Msg.message, "对方已经是您的好友", sizeof(Msg.message)))
             {
                 printf("%s\n", Msg.message);
+                sleep(1);
             }
             else
             {
                 /* 不在线，或其他情况，直接退出这个功能 */
                 printf("%s\n", Msg.message);
-                // chatRoomClientAddFriends(socketfd, friendTree, &Msg);
             }
             
             sem_post(&finish);
@@ -780,7 +778,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         case F_GROUP_CHAT:
 
             break;
-        
+
         default:
             break;
         }
@@ -789,6 +787,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         {
             write(socketfd, Msg, sizeof(struct message));
             destorySorce();
+            exit(0);
         }
 
     }

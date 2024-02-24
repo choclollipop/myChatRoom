@@ -499,11 +499,8 @@ int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
 
     while (1)
     {
-        // char writeBuffer[BUFFER_CHAT - 2 * DEFAULT_LOGIN_NAME];
-        // bzero(writeBuffer, sizeof(writeBuffer));
         /* 清空原来的内容 */
         bzero(Msg->message, sizeof(Msg->message));
-        // printf("请输入发送的消息:   \n");
         scanf("%s", Msg->message);
         while ((c = getchar()) != EOF && c != '\n');
 
@@ -514,11 +511,7 @@ int chatRoomClientStartGroupCommunicate(int socketfd, message * Msg)
             return ON_SUCCESS;
         }
 
-        // snprintf(Msg->message, DEFAULT_CHAT, "群聊消息：%s\n [%s]:%s\n", Msg->clientGroupName, Msg->clientLogInName,  writeBuffer);
-        printf("线程中的messag:%s\n", Msg->message);
-
         write(socketfd, Msg, sizeof(struct message));
-        
     }
 
     return ON_SUCCESS;
@@ -553,7 +546,6 @@ void * sendGroupMsg(void * arg)
 
     pthread_exit(NULL);
 }
-
 
 /* 功能界面接收消息 */
 void * read_message(void * arg)
@@ -657,7 +649,7 @@ void * read_message(void * arg)
             }
 
             break;
-
+        /* 创建群聊 */
         case F_CREATE_GROUP:
             printf("group test success:%s\n", Msg.message);
             if (strncmp(Msg.message, "创建群聊成功", sizeof(Msg.message)) == 0)
@@ -668,14 +660,13 @@ void * read_message(void * arg)
             else
             {
                 printf("群聊已存在！\n");
-                /* 跳转到功能界面 */
-                /* todo... */
             }
 
             sem_post(&finish);
 
             break;
-           /* 邀请好友进行群聊 */
+
+        /* 邀请好友进行群聊 */
         case F_INVITE_GROUP:
             if (strncmp(Msg.message, "邀请成功!", sizeof(Msg.message)) == 0)
             {
@@ -693,6 +684,7 @@ void * read_message(void * arg)
         /* 发起群聊 */
         case F_GROUP_CHAT:
             pthread_t sendGroup;
+            
             if (strncmp(Msg.message,  "发起群聊", sizeof(Msg.message)) == 0)
             {
                 printf("%s\n", Msg.message);
@@ -701,7 +693,7 @@ void * read_message(void * arg)
                 pthread_create(&sendGroup, NULL, sendGroupMsg, &Msg);
                 
             }
-            else if(strncmp(Msg.message, "不存在该群聊！请重新输入：", sizeof(Msg.message)) == 0)
+            else if(strncmp(Msg.message, "没有该群/该群无成员", sizeof(Msg.message)) == 0)
             {
                 printf("%s\n", Msg.message);
                 sem_post(&finish);

@@ -196,9 +196,6 @@ int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int *
         /* 解锁 */
         pthread_mutex_unlock(&g_mutex);
 
-        /* 打印在线列表  测试.......................................................... */
-        balanceBinarySearchTreeLevelOrderTravel(onlineList);
-
         bzero(Msg->message, sizeof(Msg->message));
         strncpy(Msg->message, "登录成功！", sizeof(Msg->message)); //防溢出
 
@@ -392,7 +389,6 @@ int chatRoomServerSearchFriends(chatRoom * chat,  message * Msg, char *** result
             perror("write friendListVal error");
         }
 
-        printf("friendListVal: %s\n",friendListVal);
     }
 
     return ON_SUCCESS;
@@ -556,6 +552,7 @@ int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char *** resul
     char sql[BUFFER_SQL];
     bzero(sql, sizeof(sql));
 
+    //sprintf(sql, "select * from groups where groupName = '%s' and id = '%s'", Msg->clientGroupName, Msg->requestClientName);
     sprintf(sql, "select * from groups where groupName = '%s'", Msg->clientGroupName);
     int ret = sqlite3_get_table(g_clientMsgDB, sql, result, row, column, errMsg);
     if (ret != SQLITE_OK)
@@ -634,13 +631,14 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
     }
     else if (*row == 0)
     {
-        strncpy(Msg->message, "不存在该群聊！请重新输入：", sizeof(Msg->message));
-        writeBytes = write(acceptfd, "不存在该群聊！请重新输入：", sizeof("不存在该群聊！请重新输入："));
+        strncpy(Msg->message, "没有该群/该群无成员", sizeof(Msg->message));
+        writeBytes = write(acceptfd,  Msg, sizeof(struct message));
         if (writeBytes < 0)
         {
             perror("write start  error");
             return ERROR;
         }
+        return ON_SUCCESS;
     }
     else 
     {
@@ -649,6 +647,11 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
         strncpy(Msg->message, "发起群聊", sizeof(Msg->message));
         /* 发送提示信息 */
         write(acceptfd, Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write start  error");
+            return ERROR;
+        }
 
         /* 循环读 */
         while (1)
@@ -661,15 +664,14 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
             }
 
             strncpy(copy, Msg->message, sizeof(copy));
+            strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
 
             /* 读完我先要找到群成员id并发送 */
             /*  */
             for (int idx = 0; idx <=(*row); idx++) 
-            {
-                
-                strncpy(Msg->requestClientName, (const char *)(result[0])[idx], sizeof(Msg->requestClientName)); 
+            {    
                 printf("id找到resName:%s\n", Msg->requestClientName); 
-                /* 判断在不在线 */
+                
                 /* 在线列表 */
                 BalanceBinarySearchTree * onlineList = chat->online;
 
@@ -677,7 +679,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
             
                 clientNode client;
                 bzero(client.loginName, sizeof(client.loginName));
-                strncpy(client.loginName, Msg->requestClientName, sizeof(client.loginName));
+                strncpy(client.loginName, (const char *)(result[0])[idx], sizeof(client.loginName));//
 
                 /* 查看群成员是否在线 */
                 if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
@@ -693,44 +695,28 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
                     client = *(clientNode *)onlineNode->data;
                     /* 请求通信对象的通信句柄 */
                     int requestfd = client.communicateFd;
-#if 1
+
                     /* 找到一个套接字就发送 */
                     if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
                     {
-                        bzero(Msg->message, sizeof(Msg->message));
-                        strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
-                        // write(requestfd, Msg, sizeof(struct message));
                         return ON_SUCCESS;
                     }
-#endif                  
-                    
+  
                     /* 修改发送的格式 */
                     char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DEFAULT_GROUP_NAME - DIFF];
                     bzero(buffer, sizeof(buffer));
 
-                    strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
                     strncpy(Msg->clientLogInName, client.loginName, sizeof(Msg->clientLogInName));
-                    
-                    printf("buffer:%s\n", buffer);
-                    printf("message:%s\n", Msg->message);
 
                     strncpy(buffer, copy, sizeof(buffer) - 1);
-
-                    printf("buffer1:%s\n", buffer);
-                    printf("message1:%s\n", Msg->message);
-                    
                     bzero(Msg->message, sizeof(Msg->message));
 
-                    printf("message2:%s\n", Msg->message);
                     /* 存放新的内容 */
                     sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->requestClientName, buffer);
-                    
-                    printf("接收：%s\n", Msg->message);
 
                     /* 给群成员发送信息 */
                     write(requestfd, Msg, sizeof(struct message));
         
-            
                     }
             }
            
@@ -893,9 +879,9 @@ void * chatHander(void * arg)
             pthread_exit(NULL);
         }
 
-        printf("accept:%d", clientfd);
         switch (Msg.choice)
         {
+        /* 登录 */
         case LOG_IN:
             ret = chatRoomServerLoginIn(&chat, &Msg, &result, &row, &column, &errMsg);
             if (ret != ON_SUCCESS)
@@ -984,6 +970,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     {
         //测试...............................................................................................
         printf("功能界面\n");
+        
         /* 读取客户端功能函数发过来的Msg，根据其中的func_choice跳转到相应的函数中 */
         readBytes = read(acceptfd, Msg, sizeof(struct message));
         if (readBytes < 0)
@@ -1062,15 +1049,36 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
          /* 创建群聊 */
         case F_CREATE_GROUP:
-            chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
+            ret = chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("create group error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
-            /* 群聊拉人 */
+
+        /* 群聊拉人 */
         case F_INVITE_GROUP:
-            chatRoomServerAddPeopleInGroup(chat, Msg , &result, &row, &column, &errMsg);
+            ret = chatRoomServerAddPeopleInGroup(chat, Msg , &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("invite friends in group error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
+
         /* 发起群聊 */
         case F_GROUP_CHAT:
-            chatRoomStartCommunicate(chat, Msg , &result, &row, &column, &errMsg);
+            printf("1069发起群聊");
+            ret = chatRoomStartCommunicate(chat, Msg , &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("group chat error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
         
         default:

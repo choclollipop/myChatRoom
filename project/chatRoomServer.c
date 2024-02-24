@@ -907,6 +907,7 @@ void * chatHander(void * arg)
 
     ssize_t readBytes = 0;
     int ret = 0;
+    int flag = 0;
 
     message Msg;
     bzero(&Msg, sizeof(Msg));
@@ -920,7 +921,7 @@ void * chatHander(void * arg)
         {
             perror("read error");
             close(clientfd);
-            pthread_exit(NULL);
+            break;
         }
         else if (readBytes == 0)
         {
@@ -928,8 +929,10 @@ void * chatHander(void * arg)
             //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
             printf("客户端下线\n");
             close(clientfd);
-            pthread_exit(NULL);
+            break;
         }
+
+        flag = 0;
 
         switch (Msg.choice)
         {
@@ -961,14 +964,20 @@ void * chatHander(void * arg)
                 close(clientfd);
                 // pthread_exit(NULL);
                 printf("关闭套接字，主界面退出部分\n");
+                flag = 1;
                 return NULL;
             }
             break;
         default:
             break;
         }
+
+        if (flag)
+        {
+            break;
+        }
     }
-    return NULL;
+    pthread_exit(NULL);
 }
 
 /* 聊天室功能 */

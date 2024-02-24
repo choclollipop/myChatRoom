@@ -213,6 +213,12 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
                 flag = 1;
                 continue;
             }
+            else if (!strncmp(Msg->message, "用户已在线", sizeof("用户已在线")))
+            {
+                printf("%s\n", Msg->message);
+                flag = 1;
+                continue;
+            }
             else
             {
                 printf("%s\n", Msg->message);

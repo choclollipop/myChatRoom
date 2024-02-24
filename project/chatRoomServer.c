@@ -187,6 +187,22 @@ int chatRoomServerLoginIn(chatRoom * chat, message * Msg, char *** result, int *
         strncpy(client.loginName, Msg->clientLogInName, sizeof(Msg->clientLogInName));
         client.communicateFd = acceptfd;
 
+        if (balanceBinarySearchTreeIsContainAppointVal(onlineList, (void *)&client))
+        {
+            bzero(Msg->message, sizeof(Msg->message));
+            strncpy(Msg->message, "用户已在线", sizeof(Msg->message)); //防溢出
+
+            /* 将提示信息发送给客户端 */
+            writeBytes = write(acceptfd, Msg, sizeof(struct message));
+            if (writeBytes < 0)
+            {
+                perror("write error");
+                return ERROR;
+            }
+            
+            return ON_SUCCESS;
+        }
+
         /* 加锁 */
         pthread_mutex_lock(&g_mutex);
 

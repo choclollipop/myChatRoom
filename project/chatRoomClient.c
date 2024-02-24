@@ -649,9 +649,10 @@ void * read_message(void * arg)
             }
 
             break;
+
         /* 创建群聊 */
         case F_CREATE_GROUP:
-            printf("group test success:%s\n", Msg.message);
+
             if (strncmp(Msg.message, "创建群聊成功", sizeof(Msg.message)) == 0)
             {
                 printf("%s\n", Msg.message);
@@ -671,6 +672,10 @@ void * read_message(void * arg)
             if (strncmp(Msg.message, "邀请成功!", sizeof(Msg.message)) == 0)
             {
                printf("%s\n", Msg.message);
+            }
+            else if (!strncmp(Msg.message, "该用户已存在", sizeof(Msg.message)))
+            {
+                printf("%s\n", Msg.message);
             }
             else
             { 
@@ -841,7 +846,7 @@ int chatRoomFunc(int socketfd, message * Msg)
         if (Msg->func_choice == F_EXIT)
         {
             write(socketfd, Msg, sizeof(struct message));
-            destorySorce();
+            // destorySorce();
             break;
         }
 
@@ -934,17 +939,22 @@ int main()
                 exit(-1);
             }
             break;
-
+        case EXIT:
+            /* 退出主界面 */
+            {
+                write(socketfd, &Msg, sizeof(Msg));
+                exit(0);
+            }
         default:
             break;
         }
 
-        /* 退出主界面 */
-        if (Msg.choice == EXIT)
-        {
-            write(socketfd, &Msg, sizeof(Msg));
-            break;
-        }
+        // /* 退出主界面 */
+        // if (Msg.choice == EXIT)
+        // {
+        //     write(socketfd, &Msg, sizeof(Msg));
+        //     break;
+        // }
         
     }
 

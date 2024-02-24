@@ -943,7 +943,7 @@ void * chatHander(void * arg)
             {
                 perror("LOGIN ERROR");
                 close(clientfd);
-                pthread_exit(NULL);
+                flag = 1;
             }
             break;
 
@@ -954,7 +954,7 @@ void * chatHander(void * arg)
             {
                 perror("LOGIN ERROR");
                 close(clientfd);
-                pthread_exit(NULL);
+                flag = 1;
             }
             break;
         case EXIT:

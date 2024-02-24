@@ -74,7 +74,7 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg);
 int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg);
 
 /* 邀请好友进群 */
-int chatRoomServerAddPeopleInGroup(chatRoom * chat, message *Msg, char ** errMsg);
+int chatRoomServerAddPeopleInGroup(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg);
 
 int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int * row, int * column, char ** errMsg);
 

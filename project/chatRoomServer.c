@@ -963,15 +963,35 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
          /* 创建群聊 */
         case F_CREATE_GROUP:
-            chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
+            ret = chatRoomServerCreateGroupChat(chat, Msg , &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("create group error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
+
             /* 群聊拉人 */
         case F_INVITE_GROUP:
-            chatRoomServerAddPeopleInGroup(chat, Msg, &errMsg);
+            ret = chatRoomServerAddPeopleInGroup(chat, Msg, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("invite group error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
+
         /* 发起群聊 */
         case F_GROUP_CHAT:
-            chatRoomStartCommunicate(chat, Msg , &result, &row, &column, &errMsg);
+            ret = chatRoomStartCommunicate(chat, Msg , &result, &row, &column, &errMsg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("group chat error\n");
+                sqlite3_close(g_clientMsgDB);
+                return ERROR;
+            }
             break;
         
         default:

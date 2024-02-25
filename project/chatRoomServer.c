@@ -447,7 +447,6 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
             return ERROR;
         }
         
-        printf("row:%d\n", *row);
         if ((*row) > 0)
         {
             /* 有这个好友，不应该再添加 */
@@ -494,7 +493,6 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
 /* 创建群聊 */
 int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** result, int * row, int * column, char ** errMsg)
 {
-    printf("创建群聊\n");
     int acceptfd = chat->communicateFd;
     ssize_t writeBytes = 0;
     /* 储存sql语句 */
@@ -512,8 +510,6 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
         printf("select * from groups: %s\n", (char *)errMsg);
         return 0;
     }
-
-    printf("520 get groups row: %d\n", *row);
 
     if (*row < 0)
     {
@@ -550,8 +546,6 @@ int chatRoomServerCreateGroupChat(chatRoom * chat, message * Msg , char *** resu
             return ERROR;
         }
     }
-
-    printf("create groups test\n");
 
     return  ON_SUCCESS;
 }
@@ -711,6 +705,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
             }
 
             strncpy(copy, Msg->message, sizeof(copy));
+            strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
 
             /* 读完我先要找到群成员id并发送 */
             /*  */
@@ -750,10 +745,12 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
                     char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DEFAULT_GROUP_NAME - DIFF];
                     bzero(buffer, sizeof(buffer));
                     strncpy(buffer, copy, sizeof(buffer) - 1);
+
+                    strncpy(Msg->clientLogInName, client.loginName, sizeof(Msg->clientLogInName));
                 
                     /* 存放新的内容 */
                     bzero(Msg->message, sizeof(Msg->message));
-                    sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->clientLogInName, buffer);
+                    sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->requestClientName, buffer);
 
                     /* 给群成员发送信息 */
                     write(requestfd, Msg, sizeof(struct message));
@@ -1045,7 +1042,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     while (1)
     {
         //测试...............................................................................................
-        printf("功能界面\n");
+        //printf("功能界面\n");
         
         /* 读取客户端功能函数发过来的Msg，根据其中的func_choice跳转到相应的函数中 */
         readBytes = read(acceptfd, Msg, sizeof(struct message));
@@ -1073,7 +1070,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             if (ret != ON_SUCCESS)
             {
                 printf("view friend error\n");
-                break;
+                return ERROR;
             }
 
             break;
@@ -1088,7 +1085,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             if (ret != ON_SUCCESS)
             {
                 printf("add friend error\n");
-                break;
+                return ERROR;
             }
 
             break;
@@ -1099,7 +1096,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
             if (ret != ON_SUCCESS)
             {
                 printf("delete friend error\n");
-                break;
+                return ERROR;
             }
 
             break;

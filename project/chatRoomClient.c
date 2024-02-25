@@ -805,18 +805,37 @@ int chatRoomFunc(int socketfd, message * Msg)
 
         /* 添加好友 */
         case F_FRIEND_INCREASE:
-            chatRoomClientAddFriends(socketfd, friendTree, Msg);
+            ret = chatRoomClientAddFriends(socketfd, friendTree, Msg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("invite friend error\n");
+                return ERROR;
+            }
            
             break;
 
         /* 删除好友 */
         case F_FRIEND_DELETE:
-            chatRoomDeleteFriends(socketfd, friendTree, Msg);
+            ret = chatRoomDeleteFriends(socketfd, friendTree, Msg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("delete friend error\n");
+                return ERROR;
+            }
 
             break;
 
         /* 私聊 */
         case F_PRIVATE_CHAT:
+            printf("当前好友如下\n");
+            ret = balanceBinarySearchTreeInOrderTravel(friendTree);
+            if (ret != 0)
+            {
+                printf("friend inordertrevel error\n");
+                return ERROR;
+            }
+            
+
             printf("请选择要私聊的对象:\n");
             scanf("%s", Msg->requestClientName);
             while ((c = getchar()) != EOF && c != '\n');
@@ -829,12 +848,23 @@ int chatRoomFunc(int socketfd, message * Msg)
 
         /* 创建群聊 */
         case F_CREATE_GROUP:
-            chatRoomClientCreateGroupChat(socketfd, Msg);
+            ret = chatRoomClientCreateGroupChat(socketfd, Msg);
+            if (ret != ON_SUCCESS)
+            {
+                printf("create group error\n");
+                return ERROR;
+            }
             break;
         
         /* 邀请好友入群 */
         case F_INVITE_GROUP:
-            chatRoomClientAddPeopleInGroup(socketfd, Msg, friendTree);
+            ret = chatRoomClientAddPeopleInGroup(socketfd, Msg, friendTree);
+            if (ret != ON_SUCCESS)
+            {
+                printf("view friend error\n");
+                return ERROR;
+            }
+
         break;
 
         /* 发起群聊 */

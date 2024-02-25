@@ -366,14 +366,11 @@ int chatRoomServerSearchFriends(chatRoom * chat,  message * Msg, char *** result
         perror("get row error");
         return ERROR;
     }
-    else 
+    else
     {
         /* 传送好友 */    
         for (int idx = 0; idx < (*row) * (*column); idx += *column)
         {
-            /* 将属性id和id放到 */
-            printf("好友%s\n", *((*result + idx) + *column));
-
             /* json数组添加内容 */
             json_object_array_add(friendList, json_object_new_string(*((*result + idx) + *column)));
         }
@@ -716,14 +713,11 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
             }
 
             strncpy(copy, Msg->message, sizeof(copy));
-            strncpy(Msg->requestClientName, Msg->clientLogInName, sizeof(Msg->requestClientName));
 
             /* 读完我先要找到群成员id并发送 */
             /*  */
             for (int idx = 0; idx <=(*row); idx++) 
             {    
-                printf("id找到resName:%s\n", Msg->requestClientName); 
-                
                 /* 在线列表 */
                 BalanceBinarySearchTree * onlineList = chat->online;
 
@@ -757,14 +751,11 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
                     /* 修改发送的格式 */
                     char buffer[BUFFER_CHAT - DEFAULT_LOGIN_NAME - DEFAULT_GROUP_NAME - DIFF];
                     bzero(buffer, sizeof(buffer));
-
-                    strncpy(Msg->clientLogInName, client.loginName, sizeof(Msg->clientLogInName));
-
                     strncpy(buffer, copy, sizeof(buffer) - 1);
-                    bzero(Msg->message, sizeof(Msg->message));
-
+                
                     /* 存放新的内容 */
-                    sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->requestClientName, buffer);
+                    bzero(Msg->message, sizeof(Msg->message));
+                    sprintf(Msg->message, "%s:\n [%s]:%s\n", Msg->clientGroupName, Msg->clientLogInName, buffer);
 
                     /* 给群成员发送信息 */
                     write(requestfd, Msg, sizeof(struct message));
@@ -893,6 +884,38 @@ int chatRoomDeleteFriens(chatRoom * chat, message * Msg, char *** result, int * 
     return ON_SUCCESS;
 }
 
+/* 删除在线用户 */
+int deleteOnlineClient(chatRoom * chat, message * Msg)
+{
+    BalanceBinarySearchTree * onlineList = chat->online;
+
+    clientNode onlineClient;
+    bzero(&onlineClient, sizeof(onlineClient));
+    bzero(onlineClient.loginName, sizeof(onlineClient.loginName));
+    strncpy(onlineClient.loginName, Msg->clientLogInName, sizeof(onlineClient.loginName));
+
+    /* 加锁 */
+    pthread_mutex_lock(&g_mutex);
+
+    /* 删除在线列表中的用户 */
+    int ret = balanceBinarySearchTreeDelete(onlineList, (void *)&onlineClient);
+    if (ret != 0)
+    {
+        pthread_mutex_unlock(&g_mutex);
+        return ERROR;
+    }
+
+    /* 解锁 */
+    pthread_mutex_unlock(&g_mutex);
+
+    if (onlineList->root != NULL)
+    {
+        printf("根节点没有释放空间\n");
+    }
+
+    return ON_SUCCESS;
+}
+
 /* 主功能 */
 void * chatHander(void * arg)
 {
@@ -928,6 +951,9 @@ void * chatHander(void * arg)
             /* 客户端下线 */
             //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
             printf("客户端下线\n");
+
+            deleteOnlineClient(&chat, &Msg);
+
             close(clientfd);
             break;
         }
@@ -938,6 +964,7 @@ void * chatHander(void * arg)
         {
         /* 登录 */
         case LOG_IN:
+
             ret = chatRoomServerLoginIn(&chat, &Msg, &result, &row, &column, &errMsg);
             if (ret != ON_SUCCESS)
             {
@@ -974,6 +1001,7 @@ void * chatHander(void * arg)
 
         if (flag)
         {
+            printf("线程退出\n");
             break;
         }
     }
@@ -995,8 +1023,7 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
     int row = 0;
     int column = 0;
     char * errMsg = NULL;
-    char * sql;
-    bzero(sql, sizeof(sql));
+    char * sql = NULL;
 
     /* 创建数据库 -- 存放好友表，群聊表和验证消息表 */
     int ret = sqlite3_open("clientMsg.db", &g_clientMsgDB);
@@ -1040,6 +1067,8 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         {
             //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
             printf("客户端下线\n");
+            
+            deleteOnlineClient(chat, Msg);
             sqlite3_close(g_clientMsgDB);
             close(acceptfd);
             pthread_exit(NULL);
@@ -1134,7 +1163,11 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
         case F_EXIT:
             /* 退出 */
             printf("退出\n");
+
+            deleteOnlineClient(chat, Msg);
+
             sqlite3_close(g_clientMsgDB);
+
             return ON_SUCCESS;
         
         default:

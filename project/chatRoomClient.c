@@ -100,7 +100,7 @@ int compareFunc(void * val1, void * val2)
     char * client = (char *)val1;
     char * data = (char *)val2;
 
-    int ret = strncmp(client, data, sizeof(char) * DEFAULT_LOGIN_NAME);
+    int ret = strncmp(client, data, strlen(client));
 
     if (ret > 0)
     {
@@ -191,6 +191,8 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             return ERROR;
         }
 
+
+
         ssize_t readBytes = read(socketfd, Msg, sizeof(struct  message));
         if(readBytes < 0)
         {
@@ -221,10 +223,11 @@ int chatRoomClientLoginInRegister(int socketfd, message * Msg)
             }
             else
             {
-                printf("%s\n", Msg->message);
                 flag = 0;
                 /* 清屏 */
                 system("clear");
+                printf("%s\n", Msg->message);
+
                 ret = chatRoomFunc(socketfd, Msg);
                 if (ret != ON_SUCCESS)
                 {
@@ -601,9 +604,10 @@ void * read_message(void * arg)
             if (!strncmp(Msg.message, "对方同意了您的请求", sizeof(Msg.message)))
             {
                 /* 同意请求,插入好友树 */
-                balanceBinarySearchTreeInsert(friendTree, Msg.requestClientName);
-                /* 测试......................................................................................... */
-                balanceBinarySearchTreeInOrderTravel(friendTree);
+                char * friend = (char *)malloc(sizeof(char) * DEFAULT_LOGIN_NAME);
+                bzero(friend, sizeof(friend));
+                strncpy(friend, Msg.requestClientName, sizeof(Msg.requestClientName));
+                balanceBinarySearchTreeInsert(friendTree, friend);
             }  
             else if (!strncmp(Msg.message, "对方已经是您的好友", sizeof(Msg.message)))
             {
@@ -615,7 +619,7 @@ void * read_message(void * arg)
                 /* 不在线，或其他情况，直接退出这个功能 */
                 printf("%s\n", Msg.message);
             }
-            
+
             sem_post(&finish);
 
             break;
@@ -852,7 +856,10 @@ int chatRoomFunc(int socketfd, message * Msg)
         if (Msg->func_choice == F_EXIT)
         {
             write(socketfd, Msg, sizeof(struct message));
+            pthread_cancel(readTid);
+            // close(funcMenu);
             // destorySorce();
+            // exit(0);
             break;
         }
 
@@ -912,6 +919,10 @@ int main()
     /* 开始执行功能 */
     while (1)
     {
+        bzero(&Msg, sizeof(Msg));
+        bzero(Msg.clientLogInName, sizeof(Msg.clientLogInName));
+        bzero(Msg.clientLogInPasswd, sizeof(Msg.clientLogInPasswd));
+
         printf("%s\n", mainMenuBuffer);
         printf("请选择你需要的功能：\n");
         scanf("%d", &Msg.choice);

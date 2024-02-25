@@ -484,8 +484,6 @@ int chatRoomAddFriends(chatRoom * chat, message * Msg, char *** result, int * ro
     else
     {
         write(acceptfd, "对方不存在，请确认输入的id是否正确", sizeof("对方不存在，请确认输入的id是否正确"));
-        //测试。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。。
-        printf("不存在\n");
     }
 
 
@@ -908,11 +906,6 @@ int deleteOnlineClient(chatRoom * chat, message * Msg)
     /* 解锁 */
     pthread_mutex_unlock(&g_mutex);
 
-    if (onlineList->root != NULL)
-    {
-        printf("根节点没有释放空间\n");
-    }
-
     return ON_SUCCESS;
 }
 
@@ -990,7 +983,6 @@ void * chatHander(void * arg)
                 printf("客户端下线\n");
                 close(clientfd);
                 // pthread_exit(NULL);
-                printf("关闭套接字，主界面退出部分\n");
                 flag = 1;
                 return NULL;
             }
@@ -1001,7 +993,6 @@ void * chatHander(void * arg)
 
         if (flag)
         {
-            printf("线程退出\n");
             break;
         }
     }

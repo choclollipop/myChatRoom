@@ -20,7 +20,7 @@
 #include <stdbool.h>
 
 #define SERVER_PORT     8080
-#define SERVER_ADDR     " 172.31.173.216"
+#define SERVER_ADDR     "172.31.173.216"
 #define BUFFER_SIZE     300
 #define BUFFER_SQL      100   
 #define DEFAULT_CHAT    450
@@ -708,7 +708,12 @@ void * read_message(void * arg)
                 pthread_create(&sendGroup, NULL, sendGroupMsg, &Msg);
                 
             }
-            else if(strncmp(Msg.message, "没有该群/该群无成员", sizeof(Msg.message)) == 0)
+            else if(strncmp(Msg.message, "没有该群", sizeof(Msg.message)) == 0)
+            {
+                printf("%s\n", Msg.message);
+                sem_post(&finish);
+            }
+            else if(strncmp(Msg.message, "该群无其他成员", sizeof(Msg.message)) == 0)
             {
                 printf("%s\n", Msg.message);
                 sem_post(&finish);

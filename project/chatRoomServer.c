@@ -650,7 +650,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
 
     if (*row == 0)
     {
-        strncpy(Msg->message, "没有该群/该群无成员", sizeof(Msg->message));
+        strncpy(Msg->message, "没有该群", sizeof(Msg->message));
         writeBytes = write(acceptfd,  Msg, sizeof(struct message));
         if (writeBytes < 0)
         {
@@ -676,7 +676,18 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
         perror("get  id in group error");
         exit(-1);
     }
-    else 
+    else if(*row == 0)
+    {
+        strncpy(Msg->message, "该群无其他成员", sizeof(Msg->message));
+        writeBytes = write(acceptfd,  Msg, sizeof(struct message));
+        if (writeBytes < 0)
+        {
+            perror("write start  error");
+            return ERROR;
+        }
+        return ON_SUCCESS;
+    }
+    else
     {
         /* 我先进入到发送信息的线程中 */
         bzero(Msg->message, sizeof(struct message));

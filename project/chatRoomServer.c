@@ -690,7 +690,7 @@ int chatRoomStartCommunicate(chatRoom * chat, message *Msg, char *** result, int
     else
     {
         /* 我先进入到发送信息的线程中 */
-        bzero(Msg->message, sizeof(struct message));
+        bzero(Msg->message, sizeof(Msg->message));
         strncpy(Msg->message, "发起群聊", sizeof(Msg->message));
         /* 发送提示信息 */
         write(acceptfd, Msg, sizeof(struct message));

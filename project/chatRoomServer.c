@@ -787,6 +787,7 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
     ssize_t readBytes = 0;
 
     clientNode client;
+    bzero(&client, sizeof(client));
     bzero(client.loginName, sizeof(client.loginName));
     
     strncpy(client.loginName, Msg->requestClientName, sizeof(client.loginName));
@@ -805,8 +806,8 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
         /* 请求通信对象的通信句柄 */
         int requestfd = client.communicateFd;
         
-        bzero(Msg->message, sizeof(struct message));
-        strncpy(Msg->message, "对方在线，可以输入要传送的消息", sizeof(Msg->message));
+        bzero(Msg->message, sizeof(Msg->message));
+        strncpy(Msg->message, "对方在线，可以输入要传送的消息", sizeof(Msg->message) - 1);
 
         write(acceptfd, Msg, sizeof(struct message));
 
@@ -818,11 +819,16 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
                 printf("error read\n");
                 return ERROR;
             }
+            else if (readBytes == 0)
+            {
+                
+                return ERROR;
+            }
 
             if (!strncmp(Msg->message, "q", sizeof(Msg->message)))
             {
                 bzero(Msg->message, sizeof(Msg->message));
-                strncpy(Msg->message, "对方结束会话", sizeof("对方结束会话"));
+                strncpy(Msg->message, "对方结束会话", sizeof(Msg->message) - 1);
                 write(requestfd, Msg, sizeof(struct message));
                 return ON_SUCCESS;
             }
@@ -839,7 +845,7 @@ int chatRoomChatMessage(chatRoom * chat, message * Msg)
     else
     {
         /* 用户不在线 */
-        bzero(Msg->message, sizeof(struct message));
+        bzero(Msg->message, sizeof(Msg->message));
         strncpy(Msg->message, "对方不在线，请稍后再试", sizeof(Msg->message));
         write(acceptfd, Msg, sizeof(struct message));
     }
@@ -961,6 +967,8 @@ void * chatHander(void * arg)
 
         flag = 0;
 
+        printf("主界面Msg.choice:%d\n", Msg.choice);
+
         switch (Msg.choice)
         {
         /* 登录 */
@@ -992,7 +1000,7 @@ void * chatHander(void * arg)
                 close(clientfd);
                 // pthread_exit(NULL);
                 flag = 1;
-                return NULL;
+                // return NULL;
             }
             break;
         default:
@@ -1001,10 +1009,11 @@ void * chatHander(void * arg)
 
         if (flag)
         {
+            // printf("客户端退出：\n");
             break;
         }
     }
-    pthread_exit(NULL);
+    pthread_cancel(pthread_self());
 }
 
 /* 聊天室功能 */
@@ -1161,7 +1170,6 @@ int chatRoomFunc(chatRoom * chat, message * Msg)
 
         case F_EXIT:
             /* 退出 */
-            printf("退出\n");
 
             deleteOnlineClient(chat, Msg);
 
